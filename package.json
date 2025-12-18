@@ -20,11 +20,21 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
+    "@ai-sdk/openai": "^2.0.88",
+    "@huggingface/transformers": "^3.8.1",
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@qdrant/js-client-rest": "^1.16.2",
+    "ai": "^5.0.115",
+    "pdf-parse": "^2.4.5",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "^13.0.0",
+    "xml2js": "^0.6.2",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -35,7 +45,10 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/pdf-parse": "^1.1.5",
     "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
+    "@types/xml2js": "^0.4.14",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
