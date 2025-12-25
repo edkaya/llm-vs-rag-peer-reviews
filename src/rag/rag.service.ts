@@ -32,6 +32,12 @@ export class RagService {
     async indexPaper(paper: Paper): Promise<void> {
         this.logger.log(`Indexing paper: ${paper.id}`);
 
+        const existing = await this.vectorStoreService.countByPaperId(paper.id);
+        if (existing > 0) {
+            this.logger.log(`Paper ${paper.id} is already indexed with ${existing} chunks. Skipping indexing.`);
+            return;
+        }
+
         // Convert sections to format expected by chunking service
         const sectionsForChunking = paper.sections.map((s) => ({
             title: s.heading,

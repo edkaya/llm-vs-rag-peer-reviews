@@ -62,4 +62,14 @@ export class VectorStoreService implements OnModuleInit {
             sectionName: ((r.payload as Record<string, unknown>)?.section as string) || ''
         }));
     }
+
+    async countByPaperId(paperId: string): Promise<number> {
+        const result = await this.client.count(this.collectionName, {
+            filter: {
+                must: [{ key: 'paperId', match: { value: paperId } }]
+            },
+            exact: true
+        });
+        return result.count;
+    }
 }

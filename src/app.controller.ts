@@ -36,7 +36,7 @@ export class AppController {
         // 3. Generate review with RAG
         this.logger.log('Generating review with RAG...');
         const generatedReview = await this.ragService.generateReviewWithRag(paper);
-
+        this.logger.log('Review generation complete with RAG.');
         return {
             title: paper.title,
             abstract: paper.abstract,
