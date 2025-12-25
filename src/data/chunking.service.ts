@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { v5 as uuidv5 } from 'uuid';
 import { Chunk } from './types';
+
+// Custom namespace UUID for generating deterministic chunk IDs
+const CHUNK_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
 @Injectable()
 export class ChunkingService {
@@ -24,7 +28,7 @@ export class ChunkingService {
             const chunkText = words.slice(start, end).join(' ');
 
             chunks.push({
-                id: `${paperId}-${index}`,
+                id: uuidv5(`${paperId}-${index}`, CHUNK_NAMESPACE),
                 paperId,
                 text: chunkText,
                 section,
@@ -45,6 +49,10 @@ export class ChunkingService {
             const sectionChunks = this.chunkText(paperId, section.content, section.title);
             allChunks.push(...sectionChunks);
         }
-        return allChunks.map((chunk, i) => ({ ...chunk, index: i, id: `${paperId}-${i}` }));
+        return allChunks.map((chunk, i) => ({
+            ...chunk,
+            index: i,
+            id: uuidv5(`${paperId}-${i}`, CHUNK_NAMESPACE)
+        }));
     }
 }

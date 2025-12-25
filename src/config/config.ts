@@ -4,8 +4,8 @@ export default () => ({
     },
 
     models: {
-        embedding: process.env.EMBEDDING_MODEL || 'openai/text-embedding-3-small',
-        generation: process.env.GENERATION_MODEL || 'openai/gpt-5.2',
+        embedding: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
+        generation: process.env.GENERATION_MODEL || 'gpt-5.2',
         claimExtraction: process.env.CLAIM_EXTRACTION_MODEL || 'gpt-4o-mini',
         judge: process.env.JUDGE_MODEL || 'gpt-4o',
         nli: process.env.NLI_MODEL || 'Xenova/nli-deberta-v3-small'
@@ -17,8 +17,8 @@ export default () => ({
     },
 
     dataset: {
-        path: process.env.DATASET_PATH || './data/nlpeer/arr_emnlp',
-        maxPapers: parseInt(process.env.MAX_PAPERS ?? '50', 10)
+        path: process.env.DATASET_PATH || './dataset',
+        maxPapers: parseInt(process.env.MAX_PAPERS ?? '75', 10)
     },
 
     chunking: {
@@ -31,6 +31,6 @@ export default () => ({
     },
 
     output: {
-        resultsPath: process.env.RESULTS_PATH || './data/results'
+        resultsPath: process.env.RESULTS_PATH || './results'
     }
 });

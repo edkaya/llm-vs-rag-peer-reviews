@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { ConfigService } from '@nestjs/config';
+import { SearchResult } from '../shared/types';
 
 @Injectable()
 export class VectorStoreService implements OnModuleInit {
@@ -31,11 +32,34 @@ export class VectorStoreService implements OnModuleInit {
         }
     }
 
-    async upsert() {
-        // Implementation for upserting vectors into the collection
+    async upsert(id: string, vector: number[], payload: Record<string, unknown>): Promise<void> {
+        await this.client.upsert(this.collectionName, {
+            points: [{ id, vector, payload }]
+        });
     }
 
-    async search() {
-        // Implementation for searching vectors in the collection
+    async upsertBatch(
+        points: Array<{ id: string; vector: number[]; payload: Record<string, unknown> }>
+    ): Promise<void> {
+        await this.client.upsert(this.collectionName, { points });
+    }
+
+    async search(vector: number[], paperId: string, limit: number): Promise<SearchResult[]> {
+        const results = await this.client.search(this.collectionName, {
+            vector,
+            limit,
+            filter: {
+                must: [{ key: 'paperId', match: { value: paperId } }]
+            },
+            with_payload: true
+        });
+
+        return results.map((r) => ({
+            id: r.id as string,
+            score: r.score,
+            content: ((r.payload as Record<string, unknown>)?.text as string) || '',
+            paperId: ((r.payload as Record<string, unknown>)?.paperId as string) || '',
+            sectionName: ((r.payload as Record<string, unknown>)?.section as string) || ''
+        }));
     }
 }
