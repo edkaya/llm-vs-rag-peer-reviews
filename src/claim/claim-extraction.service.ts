@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AnthropicProvider, createAnthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
@@ -33,11 +33,6 @@ export class ClaimExtractionService {
     async extractClaims(reviewText: string, systemPrompt: string): Promise<ExtractedClaims> {
         const { experimental_output } = await generateText({
             model: this.anthropic(this.model),
-            providerOptions: {
-                anthropic: {
-                    thinking: { type: 'enabled', budgetTokens: 15000 }
-                } satisfies AnthropicProviderOptions
-            },
             experimental_output: Output.object({ schema: ClaimSchema }),
             system: systemPrompt,
             prompt: reviewText
