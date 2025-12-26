@@ -3,6 +3,7 @@ import { DatasetLoaderService } from './data/dataset-loader.service';
 import { RagService } from './rag/rag.service';
 import { ClaimExtractionService } from './claim/claim-extraction.service';
 import { ClaimValidationService } from './claim/claim-validation.service';
+import { NLIService } from './hallucination/nli.service';
 import { Paper } from './data/types';
 
 @Controller()
@@ -14,7 +15,8 @@ export class AppController {
         private datasetLoaderService: DatasetLoaderService,
         private ragService: RagService,
         private claimExtractionService: ClaimExtractionService,
-        private claimValidationService: ClaimValidationService
+        private claimValidationService: ClaimValidationService,
+        private nliService: NLIService
     ) {}
 
     // Full pipeline: load → index → generate RAG review
@@ -198,5 +200,103 @@ Focus on claims that can be verified against the paper content.`;
             input: reviewText,
             claims: extractedClaims
         };
+    }
+
+    // Full pipeline with hallucination detection
+    @Get('pipeline/hallucination')
+    async runHallucinationPipeline(@Query('index') index: string = '0', @Query('useRag') useRag: string = 'true') {
+        // 1. Load papers if not loaded
+        if (this.papers.length === 0) {
+            this.logger.log('Loading papers...');
+            this.papers = this.datasetLoaderService.loadPapers();
+        }
+
+        const i = parseInt(index, 10);
+        if (i >= this.papers.length) {
+            return { error: `Index ${i} out of range. Loaded ${this.papers.length} papers.` };
+        }
+
+        const paper = this.papers[i];
+        const withRag = useRag === 'true';
+
+        // 2. Index the paper (needed for both RAG generation and NLI verification)
+        this.logger.log(`Indexing paper: ${paper.title}`);
+        await this.ragService.indexPaper(paper);
+
+        // 3. Generate review (with or without RAG)
+        let generatedReview: string;
+        if (withRag) {
+            this.logger.log('Generating review with RAG...');
+            generatedReview = await this.ragService.generateReviewWithRag(paper);
+        } else {
+            this.logger.log('Generating review without RAG...');
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+        }
+
+        // 4. Extract claims from the generated review
+        this.logger.log('Extracting claims from review...');
+        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
+
+For each claim:
+- Break compound statements into atomic claims (one fact per claim)
+- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
+- Keep the original sentence for reference
+
+Focus on claims that can be verified against the paper content. Skip purely subjective opinions like "the paper is well-written".`;
+
+        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview, extractionPrompt);
+        this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
+
+        // 5. Run NLI-based hallucination detection on each claim
+        this.logger.log('Running hallucination detection via NLI...');
+        const claimTexts = extractedClaims.claims.map((c) => c.text);
+        const nliResults = await this.nliService.detectHallucinationsBatch(claimTexts, paper.id);
+
+        // 6. Calculate summary statistics
+        const supported = nliResults.filter((r) => r.verdict === 'SUPPORTED').length;
+        const contradicted = nliResults.filter((r) => r.verdict === 'CONTRADICTED').length;
+        const unverifiable = nliResults.filter((r) => r.verdict === 'UNVERIFIABLE').length;
+        const hallucinationRate = (contradicted + unverifiable) / nliResults.length;
+
+        this.logger.log(
+            `Hallucination detection complete: ${supported} supported, ${contradicted} contradicted, ${unverifiable} unverifiable`
+        );
+
+        return {
+            paper: {
+                id: paper.id,
+                title: paper.title,
+                abstract: paper.abstract
+            },
+            pipeline: {
+                useRag: withRag,
+                generatedReview
+            },
+            claims: extractedClaims.claims.map((claim, idx) => ({
+                ...claim,
+                nli: nliResults[idx]
+            })),
+            summary: {
+                totalClaims: nliResults.length,
+                supported,
+                contradicted,
+                unverifiable,
+                hallucinationRate: Math.round(hallucinationRate * 100) / 100
+            }
+        };
+    }
+
+    // Test NLI on a single claim against a paper
+    @Post('nli/test')
+    async testNLI(@Body('claim') claim: string, @Query('paperId') paperId: string) {
+        if (!claim || !paperId) {
+            return {
+                error: 'Please provide claim and paperId query parameters',
+                example: '/nli/test?claim=The paper uses transformer architecture&paperId=abc123'
+            };
+        }
+
+        const result = await this.nliService.detectHallucination(claim, paperId);
+        return result;
     }
 }

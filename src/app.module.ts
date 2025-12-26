@@ -5,10 +5,19 @@ import { GenerationModule } from './generation/gemeration.module';
 import { DataModule } from './data/data.module';
 import { RagModule } from './rag/rag.module';
 import { ClaimModule } from './claim/claim.module';
+import { HallucinationModule } from './hallucination/hallucination.module';
 import { AppController } from './app.controller';
 
 @Module({
-    imports: [AppConfigModule, EmbeddingModule, GenerationModule, DataModule, RagModule, ClaimModule],
+    imports: [
+        AppConfigModule,
+        EmbeddingModule,
+        GenerationModule,
+        DataModule,
+        RagModule,
+        ClaimModule,
+        HallucinationModule
+    ],
     controllers: [AppController],
     providers: []
 })
