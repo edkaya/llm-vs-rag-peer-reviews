@@ -1,12 +1,14 @@
 export default () => ({
-    openai: {
-        apiKey: process.env.OPENAI_API_KEY
+    apiKeys: {
+        openai: process.env.OPENAI_API_KEY || '',
+        anthropic: process.env.ANTHROPIC_API_KEY || ''
     },
 
     models: {
         embedding: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
         generation: process.env.GENERATION_MODEL || 'gpt-5.2',
         claimExtraction: process.env.CLAIM_EXTRACTION_MODEL || 'gpt-4o-mini',
+        claimValidation: process.env.CLAIM_VALIDATION_MODEL || 'gpt-4o-mini',
         judge: process.env.JUDGE_MODEL || 'gpt-4o',
         nli: process.env.NLI_MODEL || 'Xenova/nli-deberta-v3-small'
     },

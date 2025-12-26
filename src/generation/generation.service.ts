@@ -12,7 +12,7 @@ export class GenerationService {
     constructor(private configService: ConfigService) {
         this.model = this.configService.get<string>('models.generation', '');
         this.openai = createOpenAI({
-            apiKey: this.configService.get<string>('openai.apiKey', '')
+            apiKey: this.configService.get<string>('apiKeys.openai', '')
         });
         this.logger.log(`Using generation model: ${this.model}`);
     }

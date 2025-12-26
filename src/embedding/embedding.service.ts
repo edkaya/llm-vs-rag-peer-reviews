@@ -11,7 +11,7 @@ export class EmbeddingService {
     constructor(private configService: ConfigService) {
         this.model = this.configService.get<string>('models.embedding', '');
         this.openai = createOpenAI({
-            apiKey: this.configService.get<string>('openai.apiKey', '')
+            apiKey: this.configService.get<string>('apiKeys.openai', '')
         });
     }
 
