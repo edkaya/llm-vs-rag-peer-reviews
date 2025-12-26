@@ -28,6 +28,7 @@ type TextClassificationPipeline = (input: string) => Promise<PipelineResult[]>;
 export class NLIService implements OnModuleInit {
     private pipeline: TextClassificationPipeline | null = null;
     private modelName: string;
+    private threshold: number;
     private logger = new Logger(NLIService.name);
     private isModelLoaded = false;
 
@@ -37,6 +38,8 @@ export class NLIService implements OnModuleInit {
         private embeddingService: EmbeddingService
     ) {
         this.modelName = this.configService.get<string>('models.nli', 'Xenova/nli-deberta-v3-small');
+        // Higher threshold (0.8) reduces false positives - claims need strong evidence
+        this.threshold = this.configService.get<number>('nli.threshold', 0.8);
     }
 
     async onModuleInit() {
@@ -78,11 +81,9 @@ export class NLIService implements OnModuleInit {
     }
 
     private classifyVerdict(scores: NLIScores): 'SUPPORTED' | 'CONTRADICTED' | 'UNVERIFIABLE' {
-        const threshold = 0.5;
-
-        if (scores.entailment > threshold && scores.entailment > scores.contradiction) {
+        if (scores.entailment > this.threshold && scores.entailment > scores.contradiction) {
             return 'SUPPORTED';
-        } else if (scores.contradiction > threshold && scores.contradiction > scores.entailment) {
+        } else if (scores.contradiction > this.threshold && scores.contradiction > scores.entailment) {
             return 'CONTRADICTED';
         }
         return 'UNVERIFIABLE';

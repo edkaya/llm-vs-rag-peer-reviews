@@ -4,6 +4,7 @@ import { RagService } from './rag/rag.service';
 import { ClaimExtractionService } from './claim/claim-extraction.service';
 import { ClaimValidationService } from './claim/claim-validation.service';
 import { NLIService } from './hallucination/nli.service';
+import { LLMJudgeService } from './hallucination/llm-judge.service';
 import { Paper } from './data/types';
 
 @Controller()
@@ -16,7 +17,8 @@ export class AppController {
         private ragService: RagService,
         private claimExtractionService: ClaimExtractionService,
         private claimValidationService: ClaimValidationService,
-        private nliService: NLIService
+        private nliService: NLIService,
+        private llmJudgeService: LLMJudgeService
     ) {}
 
     // Full pipeline: load → index → generate RAG review
@@ -298,5 +300,105 @@ Focus on claims that can be verified against the paper content. Skip purely subj
 
         const result = await this.nliService.detectHallucination(claim, paperId);
         return result;
+    }
+
+    // Test LLM Judge on a single claim against a paper
+    @Post('judge/test')
+    async testLLMJudge(@Body('claim') claim: string, @Query('paperId') paperId: string) {
+        if (!claim || !paperId) {
+            return {
+                error: 'Please provide claim in body and paperId query parameter',
+                example: 'POST /judge/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+            };
+        }
+
+        const result = await this.llmJudgeService.detectHallucination(claim, paperId);
+        return result;
+    }
+
+    // Full pipeline with LLM Judge hallucination detection
+    @Get('pipeline/judge')
+    async runJudgePipeline(@Query('index') index: string = '0', @Query('useRag') useRag: string = 'true') {
+        // 1. Load papers if not loaded
+        if (this.papers.length === 0) {
+            this.logger.log('Loading papers...');
+            this.papers = this.datasetLoaderService.loadPapers();
+        }
+
+        const i = parseInt(index, 10);
+        if (i >= this.papers.length) {
+            return { error: `Index ${i} out of range. Loaded ${this.papers.length} papers.` };
+        }
+
+        const paper = this.papers[i];
+        const withRag = useRag === 'true';
+
+        // 2. Index the paper (needed for both RAG generation and evidence retrieval)
+        this.logger.log(`Indexing paper: ${paper.title}`);
+        await this.ragService.indexPaper(paper);
+
+        // 3. Generate review (with or without RAG)
+        let generatedReview: string;
+        if (withRag) {
+            this.logger.log('Generating review with RAG...');
+            generatedReview = await this.ragService.generateReviewWithRag(paper);
+        } else {
+            this.logger.log('Generating review without RAG...');
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+        }
+
+        // 4. Extract claims from the generated review
+        this.logger.log('Extracting claims from review...');
+        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
+
+For each claim:
+- Break compound statements into atomic claims (one fact per claim)
+- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
+- Keep the original sentence for reference
+
+Focus on claims that can be verified against the paper content. Skip purely subjective opinions like "the paper is well-written".`;
+
+        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview, extractionPrompt);
+        this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
+
+        // 5. Run LLM Judge hallucination detection on each claim
+        this.logger.log('Running hallucination detection via LLM Judge...');
+        const claimTexts = extractedClaims.claims.map((c) => c.text);
+        const judgeResults = await this.llmJudgeService.detectHallucinationsBatch(claimTexts, paper.id);
+
+        // 6. Calculate summary statistics
+        const supported = judgeResults.filter((r) => r.verdict === 'SUPPORTED').length;
+        const partiallySupported = judgeResults.filter((r) => r.verdict === 'PARTIALLY_SUPPORTED').length;
+        const notSupported = judgeResults.filter((r) => r.verdict === 'NOT_SUPPORTED').length;
+        const contradicted = judgeResults.filter((r) => r.verdict === 'CONTRADICTED').length;
+        const hallucinationRate = (notSupported + contradicted) / judgeResults.length;
+
+        this.logger.log(
+            `LLM Judge complete: ${supported} supported, ${partiallySupported} partial, ${notSupported} not supported, ${contradicted} contradicted`
+        );
+
+        return {
+            paper: {
+                id: paper.id,
+                title: paper.title,
+                abstract: paper.abstract
+            },
+            pipeline: {
+                useRag: withRag,
+                generatedReview
+            },
+            claims: extractedClaims.claims.map((claim, idx) => ({
+                ...claim,
+                judge: judgeResults[idx]
+            })),
+            summary: {
+                totalClaims: judgeResults.length,
+                supported,
+                partiallySupported,
+                notSupported,
+                contradicted,
+                hallucinationRate: Math.round(hallucinationRate * 100) / 100
+            }
+        };
     }
 }
