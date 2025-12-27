@@ -6,6 +6,7 @@ import { DataModule } from './data/data.module';
 import { RagModule } from './rag/rag.module';
 import { ClaimModule } from './claim/claim.module';
 import { HallucinationModule } from './hallucination/hallucination.module';
+import { EvaluationModule } from './evaluation/evaluation.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -16,7 +17,8 @@ import { AppController } from './app.controller';
         DataModule,
         RagModule,
         ClaimModule,
-        HallucinationModule
+        HallucinationModule,
+        EvaluationModule
     ],
     controllers: [AppController],
     providers: []

@@ -5,7 +5,6 @@ import { VectorStoreService } from '../embedding/vector-store.service';
 import { ChunkingService } from '../data/chunking.service';
 import { GenerationService } from '../generation/generation.service';
 import { Paper } from '../data/types';
-import { SYSTEM_PROMPTS } from '../generation/prompts';
 
 const RETRIEVAL_QUERIES = [
     'main contributions and novelty of this research',
@@ -81,7 +80,7 @@ export class RagService {
         return uniqueChunks.join('\n\n---\n\n');
     }
 
-    async generateReviewWithRag(paper: Paper): Promise<string> {
+    async generateReviewWithRag(paper: Paper, systemPrompt: string): Promise<string> {
         const context = await this.retrieveContext(paper.id);
 
         const prompt = `Review the following research paper based on these key excerpts from the paper:
@@ -100,10 +99,10 @@ Please provide a comprehensive peer review covering:
 3. Weaknesses
 4. Detailed comments and suggestions`;
 
-        return this.generationService.generate(prompt, SYSTEM_PROMPTS.reviewer);
+        return this.generationService.generate(prompt, systemPrompt);
     }
 
-    async generateReviewWithoutRag(paper: Paper): Promise<string> {
+    async generateReviewWithoutRag(paper: Paper, systemPrompt: string): Promise<string> {
         const prompt = `Review the following research paper:
 
 === PAPER INFORMATION ===
@@ -120,6 +119,6 @@ Please provide a comprehensive peer review covering:
 3. Weaknesses
 4. Detailed comments and suggestions`;
 
-        return this.generationService.generate(prompt, SYSTEM_PROMPTS.reviewer);
+        return this.generationService.generate(prompt, systemPrompt);
     }
 }

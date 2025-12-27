@@ -1,7 +1,14 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { ConfigService } from '@nestjs/config';
-import { SearchResult } from '../shared/types';
+
+export interface SearchResult {
+    id: string;
+    score: number;
+    content: string;
+    paperId: string;
+    sectionName: string;
+}
 
 @Injectable()
 export class VectorStoreService implements OnModuleInit {

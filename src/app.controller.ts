@@ -6,7 +6,10 @@ import { ClaimValidationService } from './claim/claim-validation.service';
 import { NLIService } from './hallucination/nli.service';
 import { LLMJudgeService } from './hallucination/llm-judge.service';
 import { EmbeddingSimilarityService } from './hallucination/embedding-similarity.service';
+import { MetricsService } from './evaluation/metrics.service';
 import { Paper } from './data/types';
+import { PaperExperimentResult, ClaimAnalysis, ReviewMetrics } from './evaluation/types';
+import { SYSTEM_PROMPTS } from './shared/prompts';
 
 @Controller()
 export class AppController {
@@ -20,7 +23,8 @@ export class AppController {
         private claimValidationService: ClaimValidationService,
         private nliService: NLIService,
         private llmJudgeService: LLMJudgeService,
-        private embeddingSimilarityService: EmbeddingSimilarityService
+        private embeddingSimilarityService: EmbeddingSimilarityService,
+        private metricsService: MetricsService
     ) {}
 
     // Full pipeline: load → index → generate RAG review
@@ -45,7 +49,7 @@ export class AppController {
 
         // 3. Generate review with RAG
         this.logger.log('Generating review with RAG...');
-        const generatedReview = await this.ragService.generateReviewWithRag(paper);
+        const generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         this.logger.log('Review generation complete with RAG.');
         return {
             title: paper.title,
@@ -73,7 +77,7 @@ export class AppController {
 
         // 2. Generate review without RAG (full paper in context)
         this.logger.log('Generating review without RAG...');
-        const generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+        const generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
 
         return {
             title: paper.title,
@@ -121,40 +125,26 @@ export class AppController {
             this.logger.log(`Indexing paper: ${paper.title}`);
             await this.ragService.indexPaper(paper);
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper);
+            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         }
 
         // 3. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
-
-For each claim:
-- Break compound statements into atomic claims (one fact per claim)
-- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
-- Keep the original sentence for reference
-
-Focus on claims that can be verified against the paper content. Skip purely subjective opinions like "the paper is well-written".`;
-
-        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview, extractionPrompt);
+        const extractedClaims = await this.claimExtractionService.extractClaims(
+            generatedReview,
+            SYSTEM_PROMPTS.claimExtractor
+        );
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 4. Validate the extracted claims
         this.logger.log('Validating extracted claims...');
-        const validationPrompt = `You are an expert at evaluating the quality of extracted claims from peer reviews.
-
-For each claim, assess:
-1. Is it well-formed and verifiable? (not vague or subjective)
-2. Is it truly atomic? (single fact, not compound)
-3. Is the category correct?
-4. Confidence score (0-1) based on quality
-
-If a claim has issues, provide a corrected version when possible.`;
-
-        const validatedClaims = await this.claimValidationService.validateClaims(extractedClaims, validationPrompt);
-
+        const validatedClaims = await this.claimValidationService.validateClaims(
+            extractedClaims,
+            SYSTEM_PROMPTS.claimValidator
+        );
         const validCount = validatedClaims.validatedClaims.filter((c) => c.validation.isValid).length;
         this.logger.log(`Validation complete: ${validCount}/${validatedClaims.validatedClaims.length} valid claims`);
 
@@ -189,16 +179,10 @@ If a claim has issues, provide a corrected version when possible.`;
             };
         }
 
-        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
-
-For each claim:
-- Break compound statements into atomic claims (one fact per claim)
-- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
-- Keep the original sentence for reference
-
-Focus on claims that can be verified against the paper content.`;
-
-        const extractedClaims = await this.claimExtractionService.extractClaims(reviewText, extractionPrompt);
+        const extractedClaims = await this.claimExtractionService.extractClaims(
+            reviewText,
+            SYSTEM_PROMPTS.claimExtractor
+        );
 
         return {
             input: reviewText,
@@ -231,24 +215,18 @@ Focus on claims that can be verified against the paper content.`;
         let generatedReview: string;
         if (withRag) {
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper);
+            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         }
 
         // 4. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
-
-For each claim:
-- Break compound statements into atomic claims (one fact per claim)
-- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
-- Keep the original sentence for reference
-
-Focus on claims that can be verified against the paper content. Skip purely subjective opinions like "the paper is well-written".`;
-
-        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview, extractionPrompt);
+        const extractedClaims = await this.claimExtractionService.extractClaims(
+            generatedReview,
+            SYSTEM_PROMPTS.claimExtractor
+        );
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 5. Run NLI-based hallucination detection on each claim
@@ -310,7 +288,7 @@ Focus on claims that can be verified against the paper content. Skip purely subj
         if (!claim || !paperId) {
             return {
                 error: 'Please provide claim in body and paperId query parameter',
-                example: 'POST /judge/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+                example: 'POST /judge/test?paperId=abc123 with body {"claim": "..."}'
             };
         }
 
@@ -343,24 +321,18 @@ Focus on claims that can be verified against the paper content. Skip purely subj
         let generatedReview: string;
         if (withRag) {
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper);
+            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
         }
 
         // 4. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractionPrompt = `You are an expert at analyzing academic peer reviews. Extract all verifiable claims from the following peer review.
-
-For each claim:
-- Break compound statements into atomic claims (one fact per claim)
-- Identify the category: factual (about the paper content), methodological (about methods/approach), attribution (citing other work), or comparative (comparing to other work)
-- Keep the original sentence for reference
-
-Focus on claims that can be verified against the paper content. Skip purely subjective opinions like "the paper is well-written".`;
-
-        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview, extractionPrompt);
+        const extractedClaims = await this.claimExtractionService.extractClaims(
+            generatedReview,
+            SYSTEM_PROMPTS.claimExtractor
+        );
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 5. Run LLM Judge hallucination detection on each claim
@@ -410,7 +382,7 @@ Focus on claims that can be verified against the paper content. Skip purely subj
         if (!claim || !paperId) {
             return {
                 error: 'Please provide claim in body and paperId query parameter',
-                example: 'POST /embedding/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+                example: 'POST /embedding/test?paperId=abc123 with body {"claim": "..."}'
             };
         }
 
@@ -424,7 +396,7 @@ Focus on claims that can be verified against the paper content. Skip purely subj
         if (!claim || !paperId) {
             return {
                 error: 'Please provide claim in body and paperId query parameter',
-                example: 'POST /compare/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+                example: 'POST /compare/test?paperId=abc123 with body {"claim": "..."}'
             };
         }
 
@@ -457,5 +429,87 @@ Focus on claims that can be verified against the paper content. Skip purely subj
             },
             mostSimilarEvidence: embeddingResult.mostSimilarChunk
         };
+    }
+
+    // Run full experiment on a single paper: RAG vs NoRAG with metrics
+    @Get('experiment/single')
+    async runSingleExperiment(@Query('index') index: string = '0'): Promise<PaperExperimentResult> {
+        // 1. Load papers if not loaded
+        if (this.papers.length === 0) {
+            this.logger.log('Loading papers...');
+            this.papers = this.datasetLoaderService.loadPapers();
+        }
+
+        const i = parseInt(index, 10);
+        if (i >= this.papers.length) {
+            throw new Error(`Index ${i} out of range. Loaded ${this.papers.length} papers.`);
+        }
+
+        const paper = this.papers[i];
+        this.logger.log(`Starting experiment for paper: ${paper.title}`);
+
+        // 2. Index the paper (needed for RAG and hallucination detection)
+        this.logger.log('Indexing paper...');
+        await this.ragService.indexPaper(paper);
+
+        // 3. Run RAG pipeline
+        this.logger.log('=== Running RAG Pipeline ===');
+        const ragAnalysis = await this.runAnalysisPipeline(paper, true);
+
+        // 4. Run NoRAG pipeline
+        this.logger.log('=== Running NoRAG Pipeline ===');
+        const noRagAnalysis = await this.runAnalysisPipeline(paper, false);
+
+        // 5. Compare metrics
+        const comparison = this.metricsService.compareMetrics(ragAnalysis.metrics, noRagAnalysis.metrics);
+
+        this.logger.log('Experiment complete!');
+        this.logger.log(`RAG Hallucination Rate: ${ragAnalysis.metrics.hallucinationRate}`);
+        this.logger.log(`NoRAG Hallucination Rate: ${noRagAnalysis.metrics.hallucinationRate}`);
+        this.logger.log(`Delta: ${comparison.hallucinationDelta} (negative = RAG better)`);
+
+        return {
+            paperId: paper.id,
+            paperTitle: paper.title,
+            timestamp: new Date().toISOString(),
+            rag: ragAnalysis,
+            noRag: noRagAnalysis,
+            comparison
+        };
+    }
+
+    // Helper method to run the full analysis pipeline for a single mode (RAG or NoRAG)
+    private async runAnalysisPipeline(
+        paper: Paper,
+        useRag: boolean
+    ): Promise<{ review: string; claims: ClaimAnalysis[]; metrics: ReviewMetrics }> {
+        // 1. Generate review
+        const review = useRag
+            ? await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator)
+            : await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+
+        this.logger.log(`Generated ${useRag ? 'RAG' : 'NoRAG'} review (${review.split(/\s+/).length} words)`);
+
+        // 2. Extract claims
+        const extractedClaims = await this.claimExtractionService.extractClaims(review, SYSTEM_PROMPTS.claimExtractor);
+        this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
+
+        // 3. Run LLM Judge on each claim
+        const claimTexts = extractedClaims.claims.map((c) => c.text);
+        const judgeResults = await this.llmJudgeService.detectHallucinationsBatch(claimTexts, paper.id);
+
+        // 4. Build claim analysis array
+        const claims: ClaimAnalysis[] = extractedClaims.claims.map((claim, idx) => ({
+            text: claim.text,
+            category: claim.category,
+            verdict: judgeResults[idx].verdict,
+            confidence: judgeResults[idx].confidence,
+            explanation: judgeResults[idx].explanation
+        }));
+
+        // 5. Calculate metrics
+        const metrics = this.metricsService.calculateMetrics(judgeResults, review);
+
+        return { review, claims, metrics };
     }
 }
