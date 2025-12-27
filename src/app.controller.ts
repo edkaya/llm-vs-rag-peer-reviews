@@ -5,6 +5,7 @@ import { ClaimExtractionService } from './claim/claim-extraction.service';
 import { ClaimValidationService } from './claim/claim-validation.service';
 import { NLIService } from './hallucination/nli.service';
 import { LLMJudgeService } from './hallucination/llm-judge.service';
+import { EmbeddingSimilarityService } from './hallucination/embedding-similarity.service';
 import { Paper } from './data/types';
 
 @Controller()
@@ -18,7 +19,8 @@ export class AppController {
         private claimExtractionService: ClaimExtractionService,
         private claimValidationService: ClaimValidationService,
         private nliService: NLIService,
-        private llmJudgeService: LLMJudgeService
+        private llmJudgeService: LLMJudgeService,
+        private embeddingSimilarityService: EmbeddingSimilarityService
     ) {}
 
     // Full pipeline: load → index → generate RAG review
@@ -399,6 +401,61 @@ Focus on claims that can be verified against the paper content. Skip purely subj
                 contradicted,
                 hallucinationRate: Math.round(hallucinationRate * 100) / 100
             }
+        };
+    }
+
+    // Test Embedding Similarity on a single claim against a paper
+    @Post('embedding/test')
+    async testEmbeddingSimilarity(@Body('claim') claim: string, @Query('paperId') paperId: string) {
+        if (!claim || !paperId) {
+            return {
+                error: 'Please provide claim in body and paperId query parameter',
+                example: 'POST /embedding/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+            };
+        }
+
+        const result = await this.embeddingSimilarityService.detectHallucination(claim, paperId);
+        return result;
+    }
+
+    // Compare all three hallucination detection methods on the same claim
+    @Post('compare/test')
+    async compareAllMethods(@Body('claim') claim: string, @Query('paperId') paperId: string) {
+        if (!claim || !paperId) {
+            return {
+                error: 'Please provide claim in body and paperId query parameter',
+                example: 'POST /compare/test?paperId=abc123 with body {"claim": "The paper uses transformer architecture"}'
+            };
+        }
+
+        const [embeddingResult, nliResult, judgeResult] = await Promise.all([
+            this.embeddingSimilarityService.detectHallucination(claim, paperId),
+            this.nliService.detectHallucination(claim, paperId),
+            this.llmJudgeService.detectHallucination(claim, paperId)
+        ]);
+
+        return {
+            claim,
+            paperId,
+            methods: {
+                embeddingSimilarity: {
+                    verdict: embeddingResult.verdict,
+                    score: embeddingResult.maxSimilarity,
+                    isHallucination: embeddingResult.isHallucination
+                },
+                nli: {
+                    verdict: nliResult.verdict,
+                    scores: nliResult.scores,
+                    isHallucination: nliResult.isHallucination
+                },
+                llmJudge: {
+                    verdict: judgeResult.verdict,
+                    confidence: judgeResult.confidence,
+                    explanation: judgeResult.explanation,
+                    isHallucination: judgeResult.isHallucination
+                }
+            },
+            mostSimilarEvidence: embeddingResult.mostSimilarChunk
         };
     }
 }
