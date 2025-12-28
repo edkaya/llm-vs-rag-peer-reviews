@@ -15,8 +15,8 @@ export interface HumanReviewSearchResult {
     score: number;
     paperId: string;
     paperTitle: string;
+    paperAbstract: string;
     reviewText: string;
-    section: string;
 }
 
 @Injectable()
@@ -135,8 +135,8 @@ export class VectorStoreService implements OnModuleInit {
             score: r.score,
             paperId: ((r.payload as Record<string, unknown>)?.paperId as string) || '',
             paperTitle: ((r.payload as Record<string, unknown>)?.paperTitle as string) || '',
-            reviewText: ((r.payload as Record<string, unknown>)?.reviewText as string) || '',
-            section: ((r.payload as Record<string, unknown>)?.section as string) || ''
+            paperAbstract: ((r.payload as Record<string, unknown>)?.paperAbstract as string) || '',
+            reviewText: ((r.payload as Record<string, unknown>)?.reviewText as string) || ''
         }));
     }
 

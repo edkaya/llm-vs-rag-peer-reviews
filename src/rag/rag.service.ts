@@ -66,72 +66,69 @@ export class RagService {
     async indexAllHumanReviews(papers: Paper[]): Promise<void> {
         const existingCount = await this.vectorStoreService.countHumanReviews();
         if (existingCount > 0) {
-            this.logger.log(`Human reviews already indexed (${existingCount} chunks). Skipping.`);
+            this.logger.log(`Human reviews already indexed (${existingCount} reviews). Skipping.`);
             return;
         }
 
         this.logger.log(`Indexing human reviews from ${papers.length} papers...`);
 
-        const allChunks: Array<{
+        const allReviews: Array<{
             id: string;
             paperId: string;
             paperTitle: string;
             paperAbstract: string;
             reviewText: string;
-            section: string;
         }> = [];
 
-        // Create chunks from all papers
+        // Store each complete review as one chunk (not split by section)
         for (const paper of papers) {
             if (paper.humanReviews.length === 0) continue;
 
             for (let reviewIdx = 0; reviewIdx < paper.humanReviews.length; reviewIdx++) {
                 const review = paper.humanReviews[reviewIdx];
-                const reviewPrefix = `[Reviewer ${reviewIdx + 1}]`;
 
-                const sections = [
-                    { name: 'Summary', content: review.paperSummary },
-                    { name: 'Strengths', content: review.strengths },
-                    { name: 'Weaknesses', content: review.weaknesses },
-                    { name: 'Comments', content: review.comments }
-                ];
+                // Combine all sections into one complete review
+                const fullReviewText = [
+                    review.paperSummary && `Summary: ${review.paperSummary}`,
+                    review.strengths && `Strengths: ${review.strengths}`,
+                    review.weaknesses && `Weaknesses: ${review.weaknesses}`,
+                    review.comments && `Comments: ${review.comments}`
+                ]
+                    .filter(Boolean)
+                    .join('\n\n');
 
-                for (const section of sections) {
-                    if (section.content && section.content.trim()) {
-                        const chunkIdSource = `${paper.id}_r${reviewIdx}_${section.name.toLowerCase()}`;
-                        allChunks.push({
-                            id: uuidv5(chunkIdSource, REVIEW_CHUNK_NAMESPACE),
-                            paperId: paper.id,
-                            paperTitle: paper.title,
-                            paperAbstract: paper.abstract,
-                            reviewText: `${reviewPrefix} ${section.name}: ${section.content}`,
-                            section: section.name.toLowerCase()
-                        });
-                    }
+                if (fullReviewText.trim()) {
+                    allReviews.push({
+                        id: uuidv5(`${paper.id}_review_${reviewIdx}`, REVIEW_CHUNK_NAMESPACE),
+                        paperId: paper.id,
+                        paperTitle: paper.title,
+                        paperAbstract: paper.abstract,
+                        reviewText: `[Reviewer ${reviewIdx + 1}]\n${fullReviewText}`
+                    });
                 }
             }
         }
 
-        this.logger.log(`Created ${allChunks.length} review chunks. Embedding abstracts...`);
+        this.logger.log(`Created ${allReviews.length} complete reviews. Embedding abstracts...`);
 
         // Embed paper abstracts (not review text!) - this is what we search against
-        const abstracts = allChunks.map((c) => c.paperAbstract);
+        const abstracts = allReviews.map((r) => r.paperAbstract);
         const vectors = await this.embeddingService.embedChunks(abstracts);
 
         // Store in human_reviews collection
-        const points = allChunks.map((chunk, i) => ({
-            id: chunk.id,
+        const points = allReviews.map((review, i) => ({
+            id: review.id,
             vector: vectors[i],
             payload: {
-                paperId: chunk.paperId,
-                paperTitle: chunk.paperTitle,
-                reviewText: chunk.reviewText,
-                section: chunk.section
+                paperId: review.paperId,
+                paperTitle: review.paperTitle,
+                paperAbstract: review.paperAbstract,
+                reviewText: review.reviewText
             }
         }));
 
         await this.vectorStoreService.upsertHumanReviewsBatch(points);
-        this.logger.log(`Indexed ${allChunks.length} human review chunks from ${papers.length} papers`);
+        this.logger.log(`Indexed ${allReviews.length} complete human reviews from ${papers.length} papers`);
     }
 
     // Retrieve reviews from SIMILAR papers (excluding the target paper)
@@ -147,8 +144,10 @@ export class RagService {
             return '';
         }
 
-        // Format retrieved reviews with source paper info
-        const formattedReviews = results.map((r) => `[From similar paper: "${r.paperTitle}"]\n${r.reviewText}`);
+        // Format retrieved reviews with source paper info and abstract
+        const formattedReviews = results.map(
+            (r) => `[From similar paper: "${r.paperTitle}"]\nAbstract: ${r.paperAbstract}\n\n${r.reviewText}`
+        );
 
         // Deduplicate and join
         const uniqueReviews = [...new Set(formattedReviews)];
@@ -157,6 +156,7 @@ export class RagService {
 
     async generateReviewWithRag(paper: Paper): Promise<string> {
         const crossPaperContext = await this.retrieveCrossPaperReviewContext(paper);
+        this.logger.log('crossPaperContext:', crossPaperContext);
         const userPrompt = USER_PROMPTS.reviewWithRag({
             title: paper.title,
             abstract: paper.abstract,

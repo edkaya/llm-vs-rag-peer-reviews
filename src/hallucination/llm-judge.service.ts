@@ -4,7 +4,7 @@ import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { VectorStoreService } from '../embedding/vector-store.service';
 import { EmbeddingService } from '../embedding/embedding.service';
-import { AnthropicProvider, createAnthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
 import { SYSTEM_PROMPTS, USER_PROMPTS } from 'src/shared/prompts';
 import { Paper } from 'src/data/types';
 
