@@ -32,15 +32,10 @@ export class ClaimExtractionService {
     }
 
     async extractClaims(reviewText: string): Promise<ExtractedClaims> {
+        // AI SDK docs: It is recommended to set either temperature or topP, but not both.
         try {
             const { experimental_output } = await generateText({
                 model: this.anthropic(this.model),
-                // providerOptions: {
-                //     anthropic: {
-                //         effort: 'high'
-                //         // thinking: { type: 'enabled', budgetTokens: 15000 }
-                //     } satisfies AnthropicProviderOptions
-                // },
                 experimental_output: Output.object({ schema: ClaimSchema }),
                 system: SYSTEM_PROMPTS.claimExtractor,
                 prompt: USER_PROMPTS.extractClaims({ reviewText }),

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateText } from 'ai';
-import { createOpenAI, OpenAIProvider, OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
+import { createOpenAI, OpenAIProvider } from '@ai-sdk/openai';
 
 @Injectable()
 export class GenerationService {
@@ -18,19 +18,13 @@ export class GenerationService {
     }
 
     async generate(context: string, systemPrompt: string): Promise<string> {
+        // AI SDK Docs: It is recommended to set either temperature or topP, but not both.
         const { text } = await generateText({
             model: this.openai(this.model),
-            // providerOptions: {
-            //     openai: {
-            //         reasoningEffort: 'high',
-            //         textVerbosity: 'high'
-            //     } satisfies OpenAIResponsesProviderOptions
-            // },
-            temperature: 0.0,
-            topP: 1,
             system: systemPrompt,
             prompt: context,
-            maxOutputTokens: 34000
+            maxOutputTokens: 34000, // ~ 1200 words approx. 30k-34k tokens (~4 token per character according to openai)
+            temperature: 0.0
         });
         return text;
     }

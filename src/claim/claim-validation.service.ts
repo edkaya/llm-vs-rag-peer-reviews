@@ -45,6 +45,8 @@ export class ClaimValidationService {
         const claims = JSON.stringify(extractedClaims.claims, null, 2);
         const userPrompt = USER_PROMPTS.validateClaims({ claims });
 
+        // Reasoning models do not have temp and topP settings in openAI
+        // We use here gpt-5-mini, which is a reasoning model
         try {
             const { experimental_output } = await generateText({
                 model: this.openai(this.model),

@@ -62,14 +62,9 @@ export class LLMJudgeService {
             paperContent: paper?.fullText || 'No content available'
         });
 
+        // AI SDK Docs: It is recommended to set either temperature or topP, but not both.
         const { experimental_output } = await generateText({
             model: this.anthropic(this.model),
-            // providerOptions: {
-            //     anthropic: {
-            //         effort: 'high',
-            //         thinking: { type: 'enabled', budgetTokens: 7000 }
-            //     } satisfies AnthropicProviderOptions
-            // },
             experimental_output: Output.object({ schema: JudgeVerdictSchema }),
             system: SYSTEM_PROMPTS.judge,
             prompt: userPromptWithPaper,
