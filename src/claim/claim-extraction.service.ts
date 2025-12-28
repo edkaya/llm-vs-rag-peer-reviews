@@ -3,6 +3,7 @@ import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
+import { SYSTEM_PROMPTS } from 'src/shared/prompts';
 
 const ClaimSchema = z.object({
     claims: z.array(
@@ -30,18 +31,36 @@ export class ClaimExtractionService {
         this.logger.log(`Using claim extraction model: ${this.model}`);
     }
 
-    async extractClaims(reviewText: string, systemPrompt: string): Promise<ExtractedClaims> {
-        const { experimental_output } = await generateText({
-            model: this.anthropic(this.model),
-            experimental_output: Output.object({ schema: ClaimSchema }),
-            system: systemPrompt,
-            prompt: reviewText
-        });
+    async extractClaims(reviewText: string): Promise<ExtractedClaims> {
+        try {
+            const { experimental_output } = await generateText({
+                model: this.anthropic(this.model),
+                experimental_output: Output.object({ schema: ClaimSchema }),
+                system: SYSTEM_PROMPTS.claimExtractor,
+                prompt: reviewText
+            });
 
-        if (!experimental_output) {
-            this.logger.warn('Failed to extract claims, returning empty array');
+            if (!experimental_output) {
+                this.logger.warn('Failed to extract claims, returning empty array');
+                return { claims: [] };
+            }
+            return experimental_output;
+        } catch (error: unknown) {
+            // Handle case where LLM returns claims as a string instead of array
+            if (error && typeof error === 'object' && 'value' in error) {
+                const errorValue = (error as { value: { claims: unknown } }).value;
+                if (errorValue?.claims && typeof errorValue.claims === 'string') {
+                    try {
+                        const parsedClaims = JSON.parse(errorValue.claims);
+                        this.logger.warn('LLM returned claims as string, parsed manually');
+                        return { claims: parsedClaims };
+                    } catch {
+                        this.logger.error('Failed to parse stringified claims');
+                    }
+                }
+            }
+            this.logger.error(`Claim extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return { claims: [] };
         }
-        return experimental_output;
     }
 }

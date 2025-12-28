@@ -39,6 +39,7 @@ export interface PaperExperimentResult {
 
     rag: ReviewAnalysis;
     noRag: ReviewAnalysis;
+    humanReviews: string[];
 
     comparison: {
         hallucinationDelta: number; // RAG - NoRAG (negative = RAG better)

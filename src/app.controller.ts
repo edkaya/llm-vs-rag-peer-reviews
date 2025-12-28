@@ -9,7 +9,6 @@ import { EmbeddingSimilarityService } from './hallucination/embedding-similarity
 import { MetricsService } from './evaluation/metrics.service';
 import { Paper } from './data/types';
 import { PaperExperimentResult, ClaimAnalysis, ReviewMetrics } from './evaluation/types';
-import { SYSTEM_PROMPTS } from './shared/prompts';
 
 @Controller()
 export class AppController {
@@ -35,6 +34,9 @@ export class AppController {
             this.logger.log('Loading papers...');
             this.papers = this.datasetLoaderService.loadPapers();
         }
+        this.logger.log('Indexing all human reviews for cross-paper RAG...');
+        await this.ragService.indexAllHumanReviews(this.papers);
+        this.logger.log('Human reviews indexing complete.');
 
         const i = parseInt(index, 10);
         if (i >= this.papers.length) {
@@ -49,7 +51,7 @@ export class AppController {
 
         // 3. Generate review with RAG
         this.logger.log('Generating review with RAG...');
-        const generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+        const generatedReview = await this.ragService.generateReviewWithRag(paper);
         this.logger.log('Review generation complete with RAG.');
         return {
             title: paper.title,
@@ -77,7 +79,7 @@ export class AppController {
 
         // 2. Generate review without RAG (full paper in context)
         this.logger.log('Generating review without RAG...');
-        const generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+        const generatedReview = await this.ragService.generateReviewWithoutRag(paper);
 
         return {
             title: paper.title,
@@ -94,12 +96,14 @@ export class AppController {
             this.papers = this.datasetLoaderService.loadPapers();
         }
 
-        return this.papers.map((p, i) => ({
-            index: i,
-            title: p.title,
-            sections: p.sections.length,
-            humanReviews: p.humanReviews.length
-        }));
+        return {
+            count: this.papers.length,
+            papers: this.papers.map((p) => ({
+                id: p.id,
+                title: p.title,
+                abstract: p.abstract
+            }))
+        };
     }
 
     // Full pipeline with claims: generate review → extract claims → validate claims
@@ -125,26 +129,20 @@ export class AppController {
             this.logger.log(`Indexing paper: ${paper.title}`);
             await this.ragService.indexPaper(paper);
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithRag(paper);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
         }
 
         // 3. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractedClaims = await this.claimExtractionService.extractClaims(
-            generatedReview,
-            SYSTEM_PROMPTS.claimExtractor
-        );
+        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview);
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 4. Validate the extracted claims
         this.logger.log('Validating extracted claims...');
-        const validatedClaims = await this.claimValidationService.validateClaims(
-            extractedClaims,
-            SYSTEM_PROMPTS.claimValidator
-        );
+        const validatedClaims = await this.claimValidationService.validateClaims(extractedClaims);
         const validCount = validatedClaims.validatedClaims.filter((c) => c.validation.isValid).length;
         this.logger.log(`Validation complete: ${validCount}/${validatedClaims.validatedClaims.length} valid claims`);
 
@@ -179,10 +177,7 @@ export class AppController {
             };
         }
 
-        const extractedClaims = await this.claimExtractionService.extractClaims(
-            reviewText,
-            SYSTEM_PROMPTS.claimExtractor
-        );
+        const extractedClaims = await this.claimExtractionService.extractClaims(reviewText);
 
         return {
             input: reviewText,
@@ -215,18 +210,15 @@ export class AppController {
         let generatedReview: string;
         if (withRag) {
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithRag(paper);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
         }
 
         // 4. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractedClaims = await this.claimExtractionService.extractClaims(
-            generatedReview,
-            SYSTEM_PROMPTS.claimExtractor
-        );
+        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview);
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 5. Run NLI-based hallucination detection on each claim
@@ -292,7 +284,7 @@ export class AppController {
             };
         }
 
-        const result = await this.llmJudgeService.detectHallucination(claim, paperId);
+        const result = await this.llmJudgeService.detectSingleHallucination(claim, paperId);
         return result;
     }
 
@@ -321,24 +313,21 @@ export class AppController {
         let generatedReview: string;
         if (withRag) {
             this.logger.log('Generating review with RAG...');
-            generatedReview = await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithRag(paper);
         } else {
             this.logger.log('Generating review without RAG...');
-            generatedReview = await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+            generatedReview = await this.ragService.generateReviewWithoutRag(paper);
         }
 
         // 4. Extract claims from the generated review
         this.logger.log('Extracting claims from review...');
-        const extractedClaims = await this.claimExtractionService.extractClaims(
-            generatedReview,
-            SYSTEM_PROMPTS.claimExtractor
-        );
+        const extractedClaims = await this.claimExtractionService.extractClaims(generatedReview);
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
         // 5. Run LLM Judge hallucination detection on each claim
         this.logger.log('Running hallucination detection via LLM Judge...');
         const claimTexts = extractedClaims.claims.map((c) => c.text);
-        const judgeResults = await this.llmJudgeService.detectHallucinationsBatch(claimTexts, paper.id);
+        const judgeResults = await this.llmJudgeService.detectHallucination(claimTexts, paper.id);
 
         // 6. Calculate summary statistics
         const supported = judgeResults.filter((r) => r.verdict === 'SUPPORTED').length;
@@ -403,7 +392,7 @@ export class AppController {
         const [embeddingResult, nliResult, judgeResult] = await Promise.all([
             this.embeddingSimilarityService.detectHallucination(claim, paperId),
             this.nliService.detectHallucination(claim, paperId),
-            this.llmJudgeService.detectHallucination(claim, paperId)
+            this.llmJudgeService.detectSingleHallucination(claim, paperId)
         ]);
 
         return {
@@ -431,10 +420,10 @@ export class AppController {
         };
     }
 
-    // Run full experiment on a single paper: RAG vs NoRAG with metrics
+    // Run full experiment on a single paper: Cross-Paper RAG vs NoRAG with metrics
     @Get('experiment/single')
     async runSingleExperiment(@Query('index') index: string = '0'): Promise<PaperExperimentResult> {
-        // 1. Load papers if not loaded
+        // 1. Load papers and index all human reviews (once)
         if (this.papers.length === 0) {
             this.logger.log('Loading papers...');
             this.papers = this.datasetLoaderService.loadPapers();
@@ -444,16 +433,19 @@ export class AppController {
         if (i >= this.papers.length) {
             throw new Error(`Index ${i} out of range. Loaded ${this.papers.length} papers.`);
         }
+        // Index all human reviews for cross-paper RAG (one-time)
+        this.logger.log('Indexing all human reviews for cross-paper RAG...');
+        await this.ragService.indexAllHumanReviews(this.papers);
 
         const paper = this.papers[i];
         this.logger.log(`Starting experiment for paper: ${paper.title}`);
 
-        // 2. Index the paper (needed for RAG and hallucination detection)
+        // 2. Index the paper (needed for hallucination detection)
         this.logger.log('Indexing paper...');
         await this.ragService.indexPaper(paper);
 
-        // 3. Run RAG pipeline
-        this.logger.log('=== Running RAG Pipeline ===');
+        // 3. Run Cross-Paper RAG pipeline
+        this.logger.log('=== Running Cross-Paper RAG Pipeline ===');
         const ragAnalysis = await this.runAnalysisPipeline(paper, true);
 
         // 4. Run NoRAG pipeline
@@ -474,32 +466,58 @@ export class AppController {
             timestamp: new Date().toISOString(),
             rag: ragAnalysis,
             noRag: noRagAnalysis,
+            humanReviews: paper.humanReviews.map(
+                (r) =>
+                    `**Summary:** ${r.paperSummary}\n\n**Strengths:** ${r.strengths}\n\n**Weaknesses:** ${r.weaknesses}\n\n**Comments:** ${r.comments}`
+            ),
             comparison
         };
     }
 
-    // Helper method to run the full analysis pipeline for a single mode (RAG or NoRAG)
+    // Helper method to run the full analysis pipeline for a single mode
     private async runAnalysisPipeline(
         paper: Paper,
         useRag: boolean
     ): Promise<{ review: string; claims: ClaimAnalysis[]; metrics: ReviewMetrics }> {
-        // 1. Generate review
-        const review = useRag
-            ? await this.ragService.generateReviewWithRag(paper, SYSTEM_PROMPTS.reviewGenerator)
-            : await this.ragService.generateReviewWithoutRag(paper, SYSTEM_PROMPTS.reviewGenerator);
+        // 1. Generate review based on mode
+        let review: string;
+        if (useRag) {
+            review = await this.ragService.generateReviewWithRag(paper);
+        } else {
+            review = await this.ragService.generateReviewWithoutRag(paper);
+        }
 
-        this.logger.log(`Generated ${useRag ? 'RAG' : 'NoRAG'} review (${review.split(/\s+/).length} words)`);
+        this.logger.log(`Generated review (${review.split(/\s+/).length} words)`);
 
         // 2. Extract claims
-        const extractedClaims = await this.claimExtractionService.extractClaims(review, SYSTEM_PROMPTS.claimExtractor);
+        const extractedClaims = await this.claimExtractionService.extractClaims(review);
         this.logger.log(`Extracted ${extractedClaims.claims.length} claims`);
 
-        // 3. Run LLM Judge on each claim
-        const claimTexts = extractedClaims.claims.map((c) => c.text);
-        const judgeResults = await this.llmJudgeService.detectHallucinationsBatch(claimTexts, paper.id);
+        // 3. Validate claims (filter invalid, use corrected text where available)
+        const validatedClaims = await this.claimValidationService.validateClaims(extractedClaims);
 
-        // 4. Build claim analysis array
-        const claims: ClaimAnalysis[] = extractedClaims.claims.map((claim, idx) => ({
+        // Build list of claim texts: use correctedText if available, otherwise original text
+        // Only include claims that are valid OR have a corrected version
+        const processedClaims = validatedClaims.validatedClaims
+            .filter((c) => c.validation.isValid || c.validation.correctedText)
+            .map((c) => ({
+                text: c.validation.correctedText || c.text,
+                category: c.category,
+                wasValidated: c.validation.isValid,
+                wasCorrected: !!c.validation.correctedText && !c.validation.isValid
+            }));
+
+        this.logger.log(
+            `Validation: ${validatedClaims.validatedClaims.length} → ${processedClaims.length} claims ` +
+                `(${processedClaims.filter((c) => c.wasCorrected).length} corrected)`
+        );
+
+        // 4. Run LLM Judge on validated/corrected claims
+        const claimTexts = processedClaims.map((c) => c.text);
+        const judgeResults = await this.llmJudgeService.detectHallucination(claimTexts, paper.id);
+
+        // 5. Build claim analysis array
+        const claims: ClaimAnalysis[] = processedClaims.map((claim, idx) => ({
             text: claim.text,
             category: claim.category,
             verdict: judgeResults[idx].verdict,
@@ -507,7 +525,7 @@ export class AppController {
             explanation: judgeResults[idx].explanation
         }));
 
-        // 5. Calculate metrics
+        // 6. Calculate metrics
         const metrics = this.metricsService.calculateMetrics(judgeResults, review);
 
         return { review, claims, metrics };

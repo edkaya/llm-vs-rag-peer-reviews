@@ -15,7 +15,8 @@ export default () => ({
 
     vectorStore: {
         url: process.env.QDRANT_URL || 'http://localhost:6333',
-        collectionName: process.env.QDRANT_COLLECTION_NAME || 'paper_chunks'
+        paperCollectionName: process.env.PAPER_COLLECTION_NAME || 'papers',
+        reviewCollectionName: process.env.REVIEW_COLLECTION_NAME || 'human_reviews'
     },
 
     dataset: {

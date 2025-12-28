@@ -1,17 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { v5 as uuidv5 } from 'uuid';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { VectorStoreService } from '../embedding/vector-store.service';
 import { ChunkingService } from '../data/chunking.service';
 import { GenerationService } from '../generation/generation.service';
 import { Paper } from '../data/types';
+import { USER_PROMPTS, SYSTEM_PROMPTS } from '../shared/prompts';
 
-const RETRIEVAL_QUERIES = [
-    'main contributions and novelty of this research',
-    'methodology and experimental setup',
-    'results, findings and evaluation',
-    'limitations and weaknesses'
-];
+// Namespace UUID for generating deterministic review chunk IDs
+const REVIEW_CHUNK_NAMESPACE = '7ca7b810-9dad-11d1-80b4-00c04fd430c9';
 
 @Injectable()
 export class RagService {
@@ -65,60 +63,117 @@ export class RagService {
         this.logger.log(`Indexed ${chunks.length} chunks for paper ${paper.id}`);
     }
 
-    async retrieveContext(paperId: string): Promise<string> {
-        const allChunks: string[] = [];
-
-        for (const query of RETRIEVAL_QUERIES) {
-            const queryVector = await this.embeddingService.embedChunk(query);
-            const results = await this.vectorStoreService.search(queryVector, paperId, this.topK);
-            const chunkTexts = results.map((r) => r.content);
-            allChunks.push(...chunkTexts);
+    async indexAllHumanReviews(papers: Paper[]): Promise<void> {
+        const existingCount = await this.vectorStoreService.countHumanReviews();
+        if (existingCount > 0) {
+            this.logger.log(`Human reviews already indexed (${existingCount} chunks). Skipping.`);
+            return;
         }
 
-        // Deduplicate while preserving order
-        const uniqueChunks = [...new Set(allChunks)];
-        return uniqueChunks.join('\n\n---\n\n');
+        this.logger.log(`Indexing human reviews from ${papers.length} papers...`);
+
+        const allChunks: Array<{
+            id: string;
+            paperId: string;
+            paperTitle: string;
+            paperAbstract: string;
+            reviewText: string;
+            section: string;
+        }> = [];
+
+        // Create chunks from all papers
+        for (const paper of papers) {
+            if (paper.humanReviews.length === 0) continue;
+
+            for (let reviewIdx = 0; reviewIdx < paper.humanReviews.length; reviewIdx++) {
+                const review = paper.humanReviews[reviewIdx];
+                const reviewPrefix = `[Reviewer ${reviewIdx + 1}]`;
+
+                const sections = [
+                    { name: 'Summary', content: review.paperSummary },
+                    { name: 'Strengths', content: review.strengths },
+                    { name: 'Weaknesses', content: review.weaknesses },
+                    { name: 'Comments', content: review.comments }
+                ];
+
+                for (const section of sections) {
+                    if (section.content && section.content.trim()) {
+                        const chunkIdSource = `${paper.id}_r${reviewIdx}_${section.name.toLowerCase()}`;
+                        allChunks.push({
+                            id: uuidv5(chunkIdSource, REVIEW_CHUNK_NAMESPACE),
+                            paperId: paper.id,
+                            paperTitle: paper.title,
+                            paperAbstract: paper.abstract,
+                            reviewText: `${reviewPrefix} ${section.name}: ${section.content}`,
+                            section: section.name.toLowerCase()
+                        });
+                    }
+                }
+            }
+        }
+
+        this.logger.log(`Created ${allChunks.length} review chunks. Embedding abstracts...`);
+
+        // Embed paper abstracts (not review text!) - this is what we search against
+        const abstracts = allChunks.map((c) => c.paperAbstract);
+        const vectors = await this.embeddingService.embedChunks(abstracts);
+
+        // Store in human_reviews collection
+        const points = allChunks.map((chunk, i) => ({
+            id: chunk.id,
+            vector: vectors[i],
+            payload: {
+                paperId: chunk.paperId,
+                paperTitle: chunk.paperTitle,
+                reviewText: chunk.reviewText,
+                section: chunk.section
+            }
+        }));
+
+        await this.vectorStoreService.upsertHumanReviewsBatch(points);
+        this.logger.log(`Indexed ${allChunks.length} human review chunks from ${papers.length} papers`);
     }
 
-    async generateReviewWithRag(paper: Paper, systemPrompt: string): Promise<string> {
-        const context = await this.retrieveContext(paper.id);
+    // Retrieve reviews from SIMILAR papers (excluding the target paper)
+    async retrieveCrossPaperReviewContext(paper: Paper): Promise<string> {
+        // Embed the target paper's abstract to find similar papers
+        const queryVector = await this.embeddingService.embedChunk(paper.abstract);
 
-        const prompt = `Review the following research paper based on these key excerpts from the paper:
+        // Search human_reviews collection, excluding this paper's reviews
+        const results = await this.vectorStoreService.searchHumanReviewsExcluding(queryVector, paper.id, this.topK);
 
-=== KEY EXCERPTS ===
-${context}
+        if (results.length === 0) {
+            this.logger.warn(`No cross-paper reviews found for paper ${paper.id}`);
+            return '';
+        }
 
-=== PAPER INFORMATION ===
-TITLE: ${paper.title}
+        // Format retrieved reviews with source paper info
+        const formattedReviews = results.map((r) => `[From similar paper: "${r.paperTitle}"]\n${r.reviewText}`);
 
-ABSTRACT: ${paper.abstract}
-
-Please provide a comprehensive peer review covering:
-1. Summary of the paper
-2. Strengths
-3. Weaknesses
-4. Detailed comments and suggestions`;
-
-        return this.generationService.generate(prompt, systemPrompt);
+        // Deduplicate and join
+        const uniqueReviews = [...new Set(formattedReviews)];
+        return uniqueReviews.join('\n\n---\n\n');
     }
 
-    async generateReviewWithoutRag(paper: Paper, systemPrompt: string): Promise<string> {
-        const prompt = `Review the following research paper:
+    async generateReviewWithRag(paper: Paper): Promise<string> {
+        const crossPaperContext = await this.retrieveCrossPaperReviewContext(paper);
+        const userPrompt = USER_PROMPTS.reviewWithRag({
+            title: paper.title,
+            abstract: paper.abstract,
+            fullText: paper.fullText,
+            crossPaperContext
+        });
+        const systemPrompt = SYSTEM_PROMPTS.reviewGenerator;
+        return this.generationService.generate(userPrompt, systemPrompt);
+    }
 
-=== PAPER INFORMATION ===
-TITLE: ${paper.title}
-
-ABSTRACT: ${paper.abstract}
-
-=== FULL CONTENT ===
-${paper.fullText}
-
-Please provide a comprehensive peer review covering:
-1. Summary of the paper
-2. Strengths
-3. Weaknesses
-4. Detailed comments and suggestions`;
-
-        return this.generationService.generate(prompt, systemPrompt);
+    async generateReviewWithoutRag(paper: Paper): Promise<string> {
+        const userPrompt = USER_PROMPTS.reviewWithoutRag({
+            title: paper.title,
+            abstract: paper.abstract,
+            fullText: paper.fullText
+        });
+        const systemPrompt = SYSTEM_PROMPTS.reviewGenerator;
+        return this.generationService.generate(userPrompt, systemPrompt);
     }
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { VectorStoreService } from '../embedding/vector-store.service';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
+import { SYSTEM_PROMPTS } from 'src/shared/prompts';
 
 const JudgeVerdictSchema = z.object({
     verdict: z.enum(['SUPPORTED', 'PARTIALLY_SUPPORTED', 'NOT_SUPPORTED', 'CONTRADICTED']),
@@ -45,24 +46,6 @@ export class LLMJudgeService {
 
     async judgeClaimAgainstEvidence(claim: string, evidenceChunks: string[]): Promise<JudgeVerdict> {
         const evidenceText = evidenceChunks.map((chunk, i) => `[Evidence ${i + 1}]:\n${chunk}`).join('\n\n');
-        const systemPrompt = `You are an expert fact-checker evaluating claims from academic peer reviews against source paper content.
-
-Your task is to determine if the given claim is supported by the provided evidence from the paper.
-
-Verdict categories:
-- SUPPORTED: The claim is fully supported by the evidence. The evidence directly states or clearly implies what the claim asserts.
-- PARTIALLY_SUPPORTED: The claim is partially correct but missing nuance, or only some aspects are supported.
-- NOT_SUPPORTED: The evidence does not address this claim (neither supports nor contradicts). The claim cannot be verified from the given evidence.
-- CONTRADICTED: The evidence directly contradicts the claim. The claim states something opposite to what the evidence says.
-
-Be especially careful with:
-- Negations ("not", "does not", "less", "lower")
-- Comparatives ("more than", "less than", "better", "worse")
-- Specific numbers and statistics
-- Attribution of methods or results to specific entities
-
-Provide a brief, factual explanation for your verdict.`;
-
         const userPrompt = `Claim to verify:
 "${claim}"
 
@@ -74,7 +57,7 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
         const { experimental_output } = await generateText({
             model: this.anthropic(this.model),
             experimental_output: Output.object({ schema: JudgeVerdictSchema }),
-            system: systemPrompt,
+            system: SYSTEM_PROMPTS.judge,
             prompt: userPrompt
         });
 
@@ -90,7 +73,7 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
         return experimental_output;
     }
 
-    async detectHallucination(claim: string, paperId: string): Promise<LLMJudgeResult> {
+    async detectSingleHallucination(claim: string, paperId: string): Promise<LLMJudgeResult> {
         // 1. Embed the claim
         const claimEmbedding = await this.embeddingService.embedChunk(claim);
 
@@ -124,10 +107,10 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
         };
     }
 
-    async detectHallucinationsBatch(claims: string[], paperId: string): Promise<LLMJudgeResult[]> {
+    async detectHallucination(claims: string[], paperId: string): Promise<LLMJudgeResult[]> {
         const results: LLMJudgeResult[] = [];
         for (const claim of claims) {
-            const result = await this.detectHallucination(claim, paperId);
+            const result = await this.detectSingleHallucination(claim, paperId);
             results.push(result);
             this.logger.log(`Judged claim: "${claim.substring(0, 50)}..." → ${result.verdict}`);
         }

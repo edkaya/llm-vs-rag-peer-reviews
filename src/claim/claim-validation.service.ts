@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { ExtractedClaims } from './claim-extraction.service';
+import { SYSTEM_PROMPTS } from 'src/shared/prompts';
 
 const ValidationResultSchema = z.object({
     validatedClaims: z.array(
@@ -39,7 +40,7 @@ export class ClaimValidationService {
         this.logger.log(`Using claim validation model: ${this.model}`);
     }
 
-    async validateClaims(extractedClaims: ExtractedClaims, systemPrompt: string): Promise<ValidationResult> {
+    async validateClaims(extractedClaims: ExtractedClaims): Promise<ValidationResult> {
         const claimsJson = JSON.stringify(extractedClaims.claims, null, 2);
 
         const { experimental_output } = await generateText({
@@ -50,7 +51,7 @@ export class ClaimValidationService {
                 } satisfies AnthropicProviderOptions
             },
             experimental_output: Output.object({ schema: ValidationResultSchema }),
-            system: systemPrompt,
+            system: SYSTEM_PROMPTS.claimValidator,
             prompt: claimsJson
         });
 

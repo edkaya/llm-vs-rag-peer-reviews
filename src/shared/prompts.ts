@@ -1,3 +1,60 @@
+interface ReviewPromptParams {
+    title: string;
+    abstract: string;
+    fullText: string;
+    crossPaperContext?: string;
+}
+
+export const USER_PROMPTS = {
+    reviewWithRag: (params: ReviewPromptParams) => `Review the following research paper.
+
+You have access to expert peer review excerpts from SIMILAR papers in the same domain. These show what reviewers typically focus on for this type of paper.
+Use the similar paper reviews as guidance for:
+- What aspects reviewers typically examine for this type of paper
+- Common strengths/weaknesses to look for
+- Level of detail expected
+
+=== REVIEW EXCERPTS FROM SIMILAR PAPERS ===
+${params.crossPaperContext || 'No similar paper reviews available.'}
+
+=== PAPER TO REVIEW ===
+TITLE: ${params.title}
+
+ABSTRACT: ${params.abstract}
+
+=== FULL CONTENT ===
+${params.fullText}
+
+=== TASK ===
+Generate a comprehensive peer review (~1200 words). Your review must be grounded in THIS paper's actual content.
+Do not copy or assume findings from the similar papers.
+
+Provide your review covering:
+1. Summary of the paper
+2. Strengths
+3. Weaknesses
+4. Detailed comments and suggestions`,
+
+    reviewWithoutRag: (params: ReviewPromptParams) => `Review the following research paper:
+
+=== PAPER TO REVIEW ===
+TITLE: ${params.title}
+
+ABSTRACT: ${params.abstract}
+
+=== FULL CONTENT ===
+${params.fullText}
+
+=== TASK ===
+Generate a comprehensive peer review (~1200 words). Your review must be grounded in THIS paper's actual content.
+
+Provide your review covering:
+1. Summary of the paper
+2. Strengths
+3. Weaknesses
+4. Detailed comments and suggestions`
+};
+
 export const SYSTEM_PROMPTS = {
     reviewGenerator:
         'You are an expert academic peer reviewer specializing in evaluating research papers and generating peer reviews.',

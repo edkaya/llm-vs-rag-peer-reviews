@@ -22,6 +22,7 @@ export class GenerationService {
             model: this.openai(this.model),
             system: systemPrompt,
             prompt: context
+            // maxOutputTokens: 1500
         });
         return text;
     }
