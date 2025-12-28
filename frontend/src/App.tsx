@@ -6,6 +6,7 @@ import { ComparisonCard } from './components/ComparisonCard';
 import { ClaimsList } from './components/ClaimsList';
 import { ReviewPanel } from './components/ReviewPanel';
 import { PaperSelector } from './components/PaperSelector';
+import { BatchExperiment } from './components/BatchExperiment';
 
 function App() {
     const [papers, setPapers] = useState<{ id: string; title: string; abstract: string }[]>([]);
@@ -15,6 +16,7 @@ function App() {
     const [result, setResult] = useState<PaperExperimentResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'rag' | 'norag' | 'human'>('rag');
+    const [experimentMode, setExperimentMode] = useState<'single' | 'batch'>('single');
 
     useEffect(() => {
         fetchPapers()
@@ -52,69 +54,86 @@ function App() {
                 <p style={{ margin: '8px 0 0 0', color: '#888' }}>
                     Compare hallucination rates between RAG-augmented and pure LLM peer reviews
                 </p>
+                <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                    <ModeButton
+                        active={experimentMode === 'single'}
+                        onClick={() => setExperimentMode('single')}
+                    >
+                        Single Paper
+                    </ModeButton>
+                    <ModeButton
+                        active={experimentMode === 'batch'}
+                        onClick={() => setExperimentMode('batch')}
+                    >
+                        Batch Experiment
+                    </ModeButton>
+                </div>
             </header>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: 24, alignItems: 'start' }}>
-                {/* Left sidebar */}
-                <div
-                    style={{
-                        backgroundColor: '#1a1a1a',
-                        borderRadius: 8,
-                        padding: 20,
-                        position: 'sticky',
-                        top: 24
-                    }}
-                >
-                    <PaperSelector
-                        papers={papers}
-                        selectedIndex={selectedIndex}
-                        onSelect={setSelectedIndex}
-                        loading={loading}
-                    />
-
-                    <button
-                        onClick={handleRunExperiment}
-                        disabled={running || papers.length === 0}
+            {experimentMode === 'batch' ? (
+                <BatchExperiment maxPapers={papers.length} />
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: 24, alignItems: 'start' }}>
+                    {/* Left sidebar */}
+                    <div
                         style={{
-                            width: '100%',
-                            marginTop: 20,
-                            padding: '12px 20px',
-                            backgroundColor: running ? '#444' : '#6366f1',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 6,
-                            fontSize: 16,
-                            fontWeight: 600,
-                            cursor: running ? 'not-allowed' : 'pointer'
+                            backgroundColor: '#1a1a1a',
+                            borderRadius: 8,
+                            padding: 20,
+                            position: 'sticky',
+                            top: 24
                         }}
                     >
-                        {running ? 'Running Experiment...' : 'Run RAG vs NoRAG Experiment'}
-                    </button>
+                        <PaperSelector
+                            papers={papers}
+                            selectedIndex={selectedIndex}
+                            onSelect={setSelectedIndex}
+                            loading={loading}
+                        />
 
-                    {running && (
-                        <p style={{ marginTop: 12, fontSize: 13, color: '#888', textAlign: 'center' }}>
-                            This may take 1-2 minutes...
-                        </p>
-                    )}
-
-                    {error && (
-                        <div
+                        <button
+                            onClick={handleRunExperiment}
+                            disabled={running || papers.length === 0}
                             style={{
-                                marginTop: 16,
-                                padding: 12,
-                                backgroundColor: '#ef444422',
+                                width: '100%',
+                                marginTop: 20,
+                                padding: '12px 20px',
+                                backgroundColor: running ? '#444' : '#6366f1',
+                                color: '#fff',
+                                border: 'none',
                                 borderRadius: 6,
-                                color: '#ef4444',
-                                fontSize: 13
+                                fontSize: 16,
+                                fontWeight: 600,
+                                cursor: running ? 'not-allowed' : 'pointer'
                             }}
                         >
-                            {error}
-                        </div>
-                    )}
-                </div>
+                            {running ? 'Running Experiment...' : 'Run RAG vs NoRAG Experiment'}
+                        </button>
 
-                {/* Main content */}
-                <div>
+                        {running && (
+                            <p style={{ marginTop: 12, fontSize: 13, color: '#888', textAlign: 'center' }}>
+                                This may take 1-2 minutes...
+                            </p>
+                        )}
+
+                        {error && (
+                            <div
+                                style={{
+                                    marginTop: 16,
+                                    padding: 12,
+                                    backgroundColor: '#ef444422',
+                                    borderRadius: 6,
+                                    color: '#ef4444',
+                                    fontSize: 13
+                                }}
+                            >
+                                {error}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Main content */}
+                    <div>
                     {!result && !running && (
                         <div
                             style={{
@@ -241,8 +260,9 @@ function App() {
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <style>{`
                 @keyframes spin {
@@ -275,6 +295,34 @@ function TabButton({
                 borderRadius: 6,
                 cursor: 'pointer',
                 fontWeight: active ? 600 : 400
+            }}
+        >
+            {children}
+        </button>
+    );
+}
+
+function ModeButton({
+    active,
+    onClick,
+    children
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                padding: '10px 20px',
+                backgroundColor: active ? '#6366f1' : 'transparent',
+                color: active ? '#fff' : '#888',
+                border: `1px solid ${active ? '#6366f1' : '#444'}`,
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: active ? 600 : 400,
+                fontSize: 14
             }}
         >
             {children}

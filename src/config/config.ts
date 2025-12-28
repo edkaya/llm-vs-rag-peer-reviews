@@ -30,7 +30,8 @@ export default () => ({
     },
 
     rag: {
-        topK: parseInt(process.env.TOP_K ?? '5', 10)
+        topK: parseInt(process.env.TOP_K ?? '15', 10),
+        topKJudge: parseInt(process.env.TOP_K_JUDGE ?? '7', 10)
     },
 
     output: {

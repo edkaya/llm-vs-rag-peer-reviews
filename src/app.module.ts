@@ -8,6 +8,7 @@ import { ClaimModule } from './claim/claim.module';
 import { HallucinationModule } from './hallucination/hallucination.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { AppController } from './app.controller';
+import { ExperimentModule } from './experiment/experiment.module';
 
 @Module({
     imports: [
@@ -18,7 +19,8 @@ import { AppController } from './app.controller';
         RagModule,
         ClaimModule,
         HallucinationModule,
-        EvaluationModule
+        EvaluationModule,
+        ExperimentModule
     ],
     controllers: [AppController],
     providers: []

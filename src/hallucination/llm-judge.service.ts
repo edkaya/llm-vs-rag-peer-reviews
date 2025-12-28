@@ -4,8 +4,9 @@ import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { VectorStoreService } from '../embedding/vector-store.service';
 import { EmbeddingService } from '../embedding/embedding.service';
-import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
-import { SYSTEM_PROMPTS } from 'src/shared/prompts';
+import { AnthropicProvider, createAnthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import { SYSTEM_PROMPTS, USER_PROMPTS } from 'src/shared/prompts';
+import { Paper } from 'src/data/types';
 
 const JudgeVerdictSchema = z.object({
     verdict: z.enum(['SUPPORTED', 'PARTIALLY_SUPPORTED', 'NOT_SUPPORTED', 'CONTRADICTED']),
@@ -31,6 +32,7 @@ export class LLMJudgeService {
     private model: string;
     private anthropic: AnthropicProvider;
     private logger = new Logger(LLMJudgeService.name);
+    private topK: number;
 
     constructor(
         private configService: ConfigService,
@@ -42,23 +44,36 @@ export class LLMJudgeService {
             apiKey: this.configService.get<string>('apiKeys.anthropic', '')
         });
         this.logger.log(`Using LLM judge model: ${this.model}`);
+        this.topK = this.configService.get<number>('rag.topKJudge', 7);
     }
 
-    async judgeClaimAgainstEvidence(claim: string, evidenceChunks: string[]): Promise<JudgeVerdict> {
+    async judgeClaimAgainstEvidence(claim: string, evidenceChunks: string[], paper?: Paper): Promise<JudgeVerdict> {
         const evidenceText = evidenceChunks.map((chunk, i) => `[Evidence ${i + 1}]:\n${chunk}`).join('\n\n');
-        const userPrompt = `Claim to verify:
-"${claim}"
 
-Evidence from the paper:
-${evidenceText}
+        const userPrompt = USER_PROMPTS.judgeClaim({
+            claim,
+            evidenceText
+        });
 
-Evaluate whether the evidence supports, partially supports, contradicts, or does not address this claim.`;
+        const userPromptWithPaper = USER_PROMPTS.judgeClaim2({
+            claim,
+            paperTitle: paper?.title || 'Unknown Title',
+            paperAbstract: paper?.abstract || 'No abstract available',
+            paperContent: paper?.fullText || 'No content available'
+        });
 
         const { experimental_output } = await generateText({
             model: this.anthropic(this.model),
+            // providerOptions: {
+            //     anthropic: {
+            //         effort: 'high',
+            //         thinking: { type: 'enabled', budgetTokens: 7000 }
+            //     } satisfies AnthropicProviderOptions
+            // },
             experimental_output: Output.object({ schema: JudgeVerdictSchema }),
             system: SYSTEM_PROMPTS.judge,
-            prompt: userPrompt
+            prompt: userPromptWithPaper,
+            temperature: 0.0
         });
 
         if (!experimental_output) {
@@ -73,12 +88,12 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
         return experimental_output;
     }
 
-    async detectSingleHallucination(claim: string, paperId: string): Promise<LLMJudgeResult> {
-        // 1. Embed the claim
+    async detectSingleHallucination(claim: string, paper: Paper): Promise<LLMJudgeResult> {
+        // Embed the claim
         const claimEmbedding = await this.embeddingService.embedChunk(claim);
 
-        // 2. Retrieve relevant chunks
-        const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, 5);
+        // Retrieve relevant chunks
+        const chunks = await this.vectorStoreService.search(claimEmbedding, paper.id, this.topK);
 
         if (chunks.length === 0) {
             return {
@@ -93,8 +108,8 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
 
         const evidenceChunks = chunks.map((c) => c.content);
 
-        // 3. Ask LLM to judge
-        const verdict = await this.judgeClaimAgainstEvidence(claim, evidenceChunks);
+        // Ask LLM to judge
+        const verdict = await this.judgeClaimAgainstEvidence(claim, evidenceChunks, paper);
 
         return {
             claim,
@@ -107,10 +122,10 @@ Evaluate whether the evidence supports, partially supports, contradicts, or does
         };
     }
 
-    async detectHallucination(claims: string[], paperId: string): Promise<LLMJudgeResult[]> {
+    async detectHallucination(claims: string[], paper: Paper): Promise<LLMJudgeResult[]> {
         const results: LLMJudgeResult[] = [];
         for (const claim of claims) {
-            const result = await this.detectSingleHallucination(claim, paperId);
+            const result = await this.detectSingleHallucination(claim, paper);
             results.push(result);
             this.logger.log(`Judged claim: "${claim.substring(0, 50)}..." → ${result.verdict}`);
         }

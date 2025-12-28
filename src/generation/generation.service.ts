@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateText } from 'ai';
-import { createOpenAI, OpenAIProvider } from '@ai-sdk/openai';
+import { createOpenAI, OpenAIProvider, OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
 
 @Injectable()
 export class GenerationService {
@@ -20,9 +20,17 @@ export class GenerationService {
     async generate(context: string, systemPrompt: string): Promise<string> {
         const { text } = await generateText({
             model: this.openai(this.model),
+            // providerOptions: {
+            //     openai: {
+            //         reasoningEffort: 'high',
+            //         textVerbosity: 'high'
+            //     } satisfies OpenAIResponsesProviderOptions
+            // },
+            temperature: 0.0,
+            topP: 1,
             system: systemPrompt,
-            prompt: context
-            // maxOutputTokens: 1500
+            prompt: context,
+            maxOutputTokens: 34000
         });
         return text;
     }

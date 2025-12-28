@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
+import { AnthropicProvider, createAnthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
-import { SYSTEM_PROMPTS } from 'src/shared/prompts';
+import { SYSTEM_PROMPTS, USER_PROMPTS } from 'src/shared/prompts';
 
 const ClaimSchema = z.object({
     claims: z.array(
@@ -35,9 +35,16 @@ export class ClaimExtractionService {
         try {
             const { experimental_output } = await generateText({
                 model: this.anthropic(this.model),
+                // providerOptions: {
+                //     anthropic: {
+                //         effort: 'high'
+                //         // thinking: { type: 'enabled', budgetTokens: 15000 }
+                //     } satisfies AnthropicProviderOptions
+                // },
                 experimental_output: Output.object({ schema: ClaimSchema }),
                 system: SYSTEM_PROMPTS.claimExtractor,
-                prompt: reviewText
+                prompt: USER_PROMPTS.extractClaims({ reviewText }),
+                temperature: 0.0
             });
 
             if (!experimental_output) {

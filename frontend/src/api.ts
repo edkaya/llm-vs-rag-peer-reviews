@@ -52,6 +52,30 @@ export interface PaperExperimentResult {
     };
 }
 
+export interface AggregatedMetrics {
+    avgHallucinationRate: number;
+    avgGroundingScore: number;
+    avgClaimDensity: number;
+    avgConfidence: number;
+}
+
+export interface BatchExperimentResult {
+    experimentId: string;
+    timestamp: string;
+    totalPapers: number;
+    results: PaperExperimentResult[];
+    aggregated: {
+        rag: AggregatedMetrics;
+        noRag: AggregatedMetrics;
+        deltas: {
+            hallucinationRate: number;
+            groundingScore: number;
+            claimDensity: number;
+            confidence: number;
+        };
+    };
+}
+
 export interface PapersResponse {
     count: number;
     papers: { id: string; title: string; abstract: string }[];
@@ -62,22 +86,12 @@ export async function fetchPapers(): Promise<PapersResponse> {
     return res.json();
 }
 
-export async function runRagPipeline(index: number) {
-    const res = await fetch(`${API_BASE}/pipeline/rag?index=${index}`);
-    return res.json();
-}
-
-export async function runNoRagPipeline(index: number) {
-    const res = await fetch(`${API_BASE}/pipeline/no-rag?index=${index}`);
-    return res.json();
-}
-
 export async function runSingleExperiment(index: number): Promise<PaperExperimentResult> {
     const res = await fetch(`${API_BASE}/experiment/single?index=${index}`);
     return res.json();
 }
 
-export async function runJudgePipeline(index: number, useRag: boolean) {
-    const res = await fetch(`${API_BASE}/pipeline/judge?index=${index}&useRag=${useRag}`);
+export async function runBatchExperiment(count: number): Promise<BatchExperimentResult> {
+    const res = await fetch(`${API_BASE}/experiment/batch?count=${count}`);
     return res.json();
 }
