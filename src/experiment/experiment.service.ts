@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PaperExperimentResult, ClaimAnalysis, BatchExperimentResult } from './types';
+import { PaperExperimentResult, ClaimAnalysis, BatchExperimentResult, ClaimPipelineStats } from './types';
 import { Paper } from '../data/types';
 import { DatasetLoaderService } from 'src/data/dataset-loader.service';
 import { RagService } from 'src/rag/rag.service';
@@ -10,6 +10,7 @@ import { LLMJudgeService } from 'src/hallucination/llm-judge.service';
 import { MetricsService } from 'src/evaluation/metrics.service';
 import { NLIService } from 'src/hallucination/nli.service';
 import { EmbeddingSimilarityService } from 'src/hallucination/embedding-similarity.service';
+import { CsvExportService } from './csv-export.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -25,7 +26,8 @@ export class ExperimentService {
         private llmJudgeService: LLMJudgeService,
         private metricsService: MetricsService,
         private nliService: NLIService,
-        private embeddingSimilarityService: EmbeddingSimilarityService
+        private embeddingSimilarityService: EmbeddingSimilarityService,
+        private csvExportService: CsvExportService
     ) {}
 
     getAllPapers() {
@@ -80,9 +82,10 @@ export class ExperimentService {
         this.logger.log(`NoRAG Hallucination Rate: ${noRagAnalysis.metrics.hallucinationRate}`);
         this.logger.log(`Delta: ${comparison.hallucinationDelta} (negative Delta = RAG better)`);
 
-        return {
+        const PaperExperimentResult = {
             paperId: paper.id,
             paperTitle: paper.title,
+            paperAbstract: paper.abstract,
             timestamp: new Date().toISOString(),
             rag: ragAnalysis,
             noRag: noRagAnalysis,
@@ -92,6 +95,12 @@ export class ExperimentService {
             ),
             comparison
         };
+
+        // Export to CSV
+        const csvPath = this.csvExportService.exportSingleResultToCsv(PaperExperimentResult);
+        this.logger.log(`Single experiment result exported to CSV: ${csvPath}`);
+
+        return PaperExperimentResult;
     }
 
     async runBatchExperiment(count: string): Promise<BatchExperimentResult> {
@@ -135,6 +144,7 @@ export class ExperimentService {
                 results.push({
                     paperId: paper.id,
                     paperTitle: paper.title,
+                    paperAbstract: paper.abstract,
                     timestamp: new Date().toISOString(),
                     rag: ragAnalysis,
                     noRag: noRagAnalysis,
@@ -182,20 +192,26 @@ export class ExperimentService {
         this.logger.log(`Avg NoRAG Hallucination Rate: ${aggregatedNoRag.avgHallucinationRate}`);
         this.logger.log(`Delta: ${aggregated.deltas.hallucinationRate} (negative Delta = RAG better)`);
 
-        return {
+        const batchExperimentResult = {
             experimentId,
             timestamp: new Date().toISOString(),
             totalPapers: results.length,
             results,
             aggregated
         };
+
+        // Export to CSV
+        const csvPath = this.csvExportService.exportBatchResultsToCsv(batchExperimentResult);
+        this.logger.log(`Batch results exported to CSV: ${csvPath}`);
+
+        return batchExperimentResult;
     }
 
     // Helper method to run the full analysis pipeline
     private async runAnalysisPipeline(
         paper: Paper,
         useRag: boolean
-    ): Promise<{ review: string; claims: ClaimAnalysis[]; metrics: ReviewMetrics }> {
+    ): Promise<{ review: string; claims: ClaimAnalysis[]; metrics: ReviewMetrics; claimStats: ClaimPipelineStats }> {
         // Generate review based on mode
         let review: string;
         if (useRag) {
@@ -223,9 +239,11 @@ export class ExperimentService {
                 wasCorrected: !!c.validation.correctedText && !c.validation.isValid
             }));
 
+        const correctedCount = finalClaims.filter((c) => c.wasCorrected).length;
+
         this.logger.log(
             `Validation: ${validatedClaims.validatedClaims.length} → ${finalClaims.length} claims ` +
-                `(${finalClaims.filter((c) => c.wasCorrected).length} corrected)`
+                `(${correctedCount} corrected)`
         );
 
         // Run LLM Judge on final claims
@@ -244,7 +262,14 @@ export class ExperimentService {
         // Calculate metrics
         const metrics = this.metricsService.calculateMetrics(judgeResults, review);
 
-        return { review, claims, metrics };
+        // Claim pipeline stats
+        const claimStats: ClaimPipelineStats = {
+            extractedCount: extractedClaims.claims.length,
+            validatedCount: finalClaims.length,
+            correctedCount
+        };
+
+        return { review, claims, metrics, claimStats };
     }
 
     //  ------------------------------------------------

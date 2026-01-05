@@ -31,15 +31,23 @@ export interface ClaimAnalysis {
     explanation: string;
 }
 
+export interface ClaimPipelineStats {
+    extractedCount: number;
+    validatedCount: number;
+    correctedCount: number;
+}
+
 export interface ReviewAnalysis {
     review: string;
     claims: ClaimAnalysis[];
     metrics: ReviewMetrics;
+    claimStats: ClaimPipelineStats;
 }
 
 export interface PaperExperimentResult {
     paperId: string;
     paperTitle: string;
+    paperAbstract: string;
     timestamp: string;
     rag: ReviewAnalysis;
     noRag: ReviewAnalysis;

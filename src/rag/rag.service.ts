@@ -156,7 +156,6 @@ export class RagService {
 
     async generateReviewWithRag(paper: Paper): Promise<string> {
         const crossPaperContext = await this.retrieveCrossPaperReviewContext(paper);
-        this.logger.log('crossPaperContext:', crossPaperContext);
         const userPrompt = USER_PROMPTS.reviewWithRag({
             title: paper.title,
             abstract: paper.abstract,

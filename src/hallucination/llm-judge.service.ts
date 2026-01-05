@@ -67,7 +67,7 @@ export class LLMJudgeService {
             model: this.anthropic(this.model),
             experimental_output: Output.object({ schema: JudgeVerdictSchema }),
             system: SYSTEM_PROMPTS.judge,
-            prompt: userPromptWithPaper,
+            prompt: userPrompt,
             temperature: 0.0
         });
 
