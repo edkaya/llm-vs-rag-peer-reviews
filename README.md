@@ -14,9 +14,9 @@ This project investigates whether augmenting LLMs with Retrieval-Augmented Gener
 
 ### Key Features
 
-- **Cross-Paper RAG**: Retrieves human reviews from similar papers (by abstract similarity) to guide review generation
-- **Multi-provider setup**: Uses different LLM providers for different tasks to avoid bias
-- **Dual hallucination detection**: LLM Judge (Anthropic) and NLI model run on the same claims for metrics comparison
+- **Cross-Paper RAG**: Retrieves similar paper abstracts and their human reviews (by abstract similarity) to guide review generation
+- **Multi-provider setup**: Uses different LLM providers for different tasks to avoid bias (AI Framework: AI-SDK by Vercel)
+- **Dual hallucination detection**: LLM Judge and NLI model run on the same claims for metrics comparison
 - **Batch experiments**: Run experiments across multiple papers with aggregated metrics
 - **CSV export**: Export detailed results with all metrics for statistical analysis
 - **React dashboard**: Visualize experiment results comparing RAG vs NoRAG across both detection methods
