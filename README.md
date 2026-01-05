@@ -1,6 +1,6 @@
 # LLM vs RAG Peer Reviews
 
-A research system for comparing **LLM-only** vs **RAG-augmented** peer review generation, with automated hallucination detection and metrics analysis.
+A research system for comparing **LLM-only** vs **RAG-supported** peer review generation, with automated hallucination detection and metrics analysis.
 
 ## Overview
 
@@ -16,38 +16,41 @@ This project investigates whether augmenting LLMs with Retrieval-Augmented Gener
 
 - **Cross-Paper RAG**: Retrieves human reviews from similar papers (by abstract similarity) to guide review generation
 - **Multi-provider setup**: Uses different LLM providers for different tasks to avoid bias
-- **Multiple hallucination detection methods**: LLM Judge, NLI model, and embedding similarity
+- **Dual hallucination detection**: LLM Judge (Anthropic) and NLI model run on the same claims for metrics comparison
 - **Batch experiments**: Run experiments across multiple papers with aggregated metrics
-- **React dashboard**: Visualize experiment results and compare RAG vs NoRAG performance
+- **CSV export**: Export detailed results with all metrics for statistical analysis
+- **React dashboard**: Visualize experiment results comparing RAG vs NoRAG across both detection methods
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Experiment Pipeline                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌──────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐ │
-│  │  Paper   │───▶│   Review     │───▶│   Claim     │───▶│ Hallucin.  │ │
-│  │  Input   │    │  Generation  │    │ Extraction  │    │ Detection  │ │
-│  └──────────┘    └──────────────┘    └─────────────┘    └────────────┘ │
-│       │                │                    │                  │        │
-│       │          ┌─────┴─────┐              │            ┌─────┴─────┐  │
-│       │          │           │              │            │           │  │
-│       ▼          ▼           ▼              ▼            ▼           │  │
-│  ┌────────┐  ┌──────┐   ┌────────┐   ┌──────────┐   ┌────────┐      │  │
-│  │ Qdrant │  │ RAG  │   │ NoRAG  │   │Validation│   │ LLM    │      │  │
-│  │ Vector │  │Review│   │ Review │   │ (OpenAI) │   │ Judge  │      │  │
-│  │  Store │  └──────┘   └────────┘   └──────────┘   └────────┘      │  │
-│  └────────┘                                                          │  │
-│                                                                      │  │
-│                              ┌────────────────────────────────────┐  │  │
-│                              │         Metrics Service            │◀─┘  │
-│                              │  • Hallucination Rate              │     │
-│                              │  • Grounding Score                 │     │
-│                              │  • Claim Density                   │     │
-│                              └────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Dual Detection Pipeline                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐    │
+│  │  Paper   │───▶│   Review     │───▶│   Claim     │───▶│ Dual Halluc. │    │
+│  │  Input   │    │  Generation  │    │ Extraction  │    │  Detection   │    │
+│  └──────────┘    └──────────────┘    └─────────────┘    └──────────────┘    │
+│       │                │                    │                    │          │
+│       │          ┌─────┴─────┐              │              ┌─────┴─────┐    │
+│       │          │           │              │              │           │    │
+│       ▼          ▼           ▼              ▼              ▼           ▼    │
+│  ┌────────┐  ┌──────┐   ┌────────┐   ┌──────────┐   ┌───────────┐  ┌─────┐  │
+│  │ Qdrant │  │ RAG  │   │ NoRAG  │   │Validation│   │LLM Judge  │  │ NLI │  │
+│  │ Vector │  │Review│   │ Review │   │ (OpenAI) │   │(Anthropic)│  │Model│  │
+│  │  Store │  └──────┘   └────────┘   └──────────┘   └───────────┘  └─────┘  │ 
+│  └────────┘                                                │           │    │
+│                                                            └───────────┘    │
+│                                                                    │        │
+│                              ┌──────────────────────────────────────┐       │
+│                              │         Metrics Service              │◀──────┘
+│                              │  • LLM Judge: Halluc., Grounding     │       │
+│                              │  • NLI: Halluc., Grounding           │       │
+│                              │  • Claim Density, Confidence         │       │
+│                              │  • CSV Export                        │       │
+│                              └──────────────────────────────────────┘       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -86,6 +89,7 @@ llm-vs-rag-peer-reviews/
 │   │
 │   ├── experiment/                # Experiment orchestration
 │   │   ├── experiment.service.ts        # Run single/batch experiments
+│   │   ├── csv-export.service.ts        # Export results to CSV
 │   │   ├── types.ts                     # Experiment result types
 │   │   └── experiment.module.ts
 │   │
@@ -126,6 +130,9 @@ llm-vs-rag-peer-reviews/
 │           ├── paper.itg.json     # Paper content
 │           └── reviews.json       # Human reviews
 │
+│── results/
+│   └── results_{timestamp}_{experimentId}.csv      # Results of the batch experiment 
+│
 ├── docker-compose.yml             # Qdrant database
 ├── .env.example                   # Environment template
 └── package.json
@@ -159,28 +166,6 @@ cp .env.example .env
 
 # Edit with your API keys
 nano .env
-```
-
-Required environment variables:
-
-```env
-# API Keys
-OPENAI_API_KEY=sk-your-openai-key
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
-
-# Models (recommended configuration)
-GENERATION_MODEL=gpt-5-2025-08-07
-CLAIM_EXTRACTION_MODEL=claude-sonnet-4-5-20250514
-CLAIM_VALIDATION_MODEL=gpt-5-mini-2025-08-07
-JUDGE_MODEL=claude-opus-4-5-20251101
-
-# Vector Database
-QDRANT_URL=http://localhost:6333
-QDRANT_COLLECTION_NAME=paper_chunks
-
-# Dataset
-DATASET_PATH=./dataset
-MAX_PAPERS=75
 ```
 
 ### 3. Start Qdrant database
@@ -275,21 +260,29 @@ curl -X POST "http://localhost:3000/compare/test?paperId=PAPER_ID_HERE" \
 
 ## Metrics
 
-The system computes the following metrics for each generated review:
+The system computes metrics using **two independent hallucination detection methods** that evaluate the **same extracted claims**:
+
+### Core Metrics (computed for both LLM Judge and NLI)
 
 | Metric | Formula | Description |
 |--------|---------|-------------|
 | **Hallucination Rate** | `(NOT_SUPPORTED + CONTRADICTED) / Total` | Percentage of ungrounded claims |
-| **Grounding Score** | `(SUPPORTED + 0.5×PARTIAL) / Total` | How well claims are supported |
+| **Grounding Score** | `(SUPPORTED + 0.5×PARTIAL) / Total` (LLM)<br>`SUPPORTED / Total` (NLI) | How well claims are supported |
 | **Claim Density** | `Claims / Word Count` | Claims per word in review |
-| **Avg Confidence** | `Mean(confidence scores)` | Average LLM confidence |
+| **Avg Confidence** | `Mean(confidence scores)` (LLM)<br>`Mean(entailment scores)` (NLI) | Average detection confidence |
 
-### Verdict Categories
+### LLM Judge Verdict Categories (Anthropic)
 
 - **SUPPORTED**: Claim fully supported by paper evidence
 - **PARTIALLY_SUPPORTED**: Claim partially correct but missing nuance
 - **NOT_SUPPORTED**: Evidence doesn't address the claim
 - **CONTRADICTED**: Evidence directly opposes the claim
+
+### NLI Verdict Categories (Xenova/nli-deberta-v3-small)
+
+- **SUPPORTED**: High entailment score (claim follows from evidence)
+- **UNVERIFIABLE**: High neutral score (claim cannot be verified)
+- **CONTRADICTED**: High contradiction score (claim opposes evidence)
 
 ## Model Configuration
 
@@ -297,8 +290,8 @@ The system uses different models for different tasks to avoid provider bias:
 
 | Task | Provider | Recommended Model | Reasoning |
 |------|----------|-------------------|-----------|
-| Review Generation | OpenAI | GPT-5 | Creative text generation |
-| Claim Extraction | Anthropic | Claude Sonnet 4.5 | Structured output accuracy |
+| Review Generation | OpenAI | GPT-4.1 | Non-reasoning & fast text generation |
+| Claim Extraction | Anthropic | Claude Sonnet 4.5 | Structured output accuracy & Good reasoning |
 | Claim Validation | OpenAI | GPT-5 Mini | Cross-provider validation |
 | LLM Judge | Anthropic | Claude Opus 4.5 | Deep reasoning for verdicts |
 
