@@ -123,8 +123,8 @@ llm-vs-rag-peer-reviews/
 │   │       └── ComparisonCard.tsx     # RAG vs NoRAG comparison
 │   └── package.json
 │
-├── dataset/                       # Research papers dataset
-│   └── {paper_id}/
+├── dataset/                       # Research papers dataset (nlpeer)
+│   └── {paper_id}/                # Represents one paper from nlpeer dataset
 │       └── v1/
 │           ├── meta.json          # Paper metadata
 │           ├── paper.itg.json     # Paper content
@@ -152,7 +152,7 @@ This project uses the **NLPeer** dataset, a multi-domain corpus of peer reviews 
 
 **Repository**: [https://github.com/UKPLab/nlpeer](https://github.com/UKPLab/nlpeer)
 
-After downloading the dataset, create a folder called `dataset` in the root folder of this repository, and put all the data listed under `/data` folder of the nlpeer dataset you freshly downloaded.
+After downloading the dataset, create a folder called `dataset` in the root of this repository, and put all the data listed under `/data` folder of the nlpeer dataset you freshly downloaded into the folder `dataset`.
 
 ## Installation
 
