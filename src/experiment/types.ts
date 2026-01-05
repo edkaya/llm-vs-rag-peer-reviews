@@ -1,11 +1,22 @@
 import { ReviewMetrics } from '../evaluation/types';
+import { NLIScores } from '../hallucination/nli.service';
+
+export interface LLMJudgeClaimResult {
+    verdict: string;
+    confidence: number;
+    explanation: string;
+}
+
+export interface NLIClaimResult {
+    verdict: string;
+    scores: NLIScores;
+}
 
 export interface ClaimAnalysis {
     text: string;
     category: string;
-    verdict: string;
-    confidence: number;
-    explanation: string;
+    llmJudge: LLMJudgeClaimResult;
+    nli: NLIClaimResult;
 }
 
 export interface ClaimPipelineStats {
@@ -17,8 +28,16 @@ export interface ClaimPipelineStats {
 export interface ReviewAnalysis {
     review: string;
     claims: ClaimAnalysis[];
-    metrics: ReviewMetrics;
+    llmJudgeMetrics: ReviewMetrics;
+    nliMetrics: ReviewMetrics;
     claimStats: ClaimPipelineStats;
+}
+
+export interface MetricDeltas {
+    hallucinationDelta: number; // RAG - NoRAG (negative = RAG better)
+    groundingDelta: number; // RAG - NoRAG (positive = RAG better)
+    claimDensityDelta: number; // RAG - NoRAG
+    confidenceDelta: number; // RAG - NoRAG
 }
 
 export interface PaperExperimentResult {
@@ -32,11 +51,23 @@ export interface PaperExperimentResult {
     humanReviews: string[];
 
     comparison: {
-        hallucinationDelta: number; // RAG - NoRAG (negative = RAG better)
-        groundingDelta: number; // RAG - NoRAG (positive = RAG better)
-        claimDensityDelta: number; // RAG - NoRAG
-        confidenceDelta: number; // RAG - NoRAG
+        llmJudge: MetricDeltas;
+        nli: MetricDeltas;
     };
+}
+
+export interface AggregatedMetrics {
+    avgHallucinationRate: number;
+    avgGroundingScore: number;
+    avgClaimDensity: number;
+    avgConfidence: number;
+}
+
+export interface AggregatedDeltas {
+    hallucinationRate: number;
+    groundingScore: number;
+    claimDensity: number;
+    confidence: number;
 }
 
 export interface BatchExperimentResult {
@@ -46,23 +77,15 @@ export interface BatchExperimentResult {
     results: PaperExperimentResult[];
 
     aggregated: {
-        rag: {
-            avgHallucinationRate: number;
-            avgGroundingScore: number;
-            avgClaimDensity: number;
-            avgConfidence: number;
+        llmJudge: {
+            rag: AggregatedMetrics;
+            noRag: AggregatedMetrics;
+            deltas: AggregatedDeltas;
         };
-        noRag: {
-            avgHallucinationRate: number;
-            avgGroundingScore: number;
-            avgClaimDensity: number;
-            avgConfidence: number;
-        };
-        deltas: {
-            hallucinationRate: number;
-            groundingScore: number;
-            claimDensity: number;
-            confidence: number;
+        nli: {
+            rag: AggregatedMetrics;
+            noRag: AggregatedMetrics;
+            deltas: AggregatedDeltas;
         };
     };
 }

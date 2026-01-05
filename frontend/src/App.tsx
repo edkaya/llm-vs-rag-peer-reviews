@@ -183,11 +183,28 @@ function App() {
                                 </p>
                             </div>
 
-                            {/* Metrics comparison */}
-                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                                <MetricsCard title="RAG Review" metrics={result.rag.metrics} variant="rag" />
-                                <MetricsCard title="NoRAG Review" metrics={result.noRag.metrics} variant="norag" />
-                                <ComparisonCard comparison={result.comparison} />
+                            {/* Metrics comparison - LLM Judge */}
+                            <div>
+                                <h3 style={{ margin: '0 0 12px 0', color: '#8b5cf6', fontSize: 16 }}>
+                                    LLM Judge Detection
+                                </h3>
+                                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                    <MetricsCard title="RAG Review (LLM)" metrics={result.rag.llmJudgeMetrics} variant="rag" />
+                                    <MetricsCard title="NoRAG Review (LLM)" metrics={result.noRag.llmJudgeMetrics} variant="norag" />
+                                    <ComparisonCard title="LLM Judge Δ" comparison={result.comparison.llmJudge} />
+                                </div>
+                            </div>
+
+                            {/* Metrics comparison - NLI */}
+                            <div>
+                                <h3 style={{ margin: '0 0 12px 0', color: '#ec4899', fontSize: 16 }}>
+                                    NLI Detection
+                                </h3>
+                                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                    <MetricsCard title="RAG Review (NLI)" metrics={result.rag.nliMetrics} variant="rag" />
+                                    <MetricsCard title="NoRAG Review (NLI)" metrics={result.noRag.nliMetrics} variant="norag" />
+                                    <ComparisonCard title="NLI Δ" comparison={result.comparison.nli} />
+                                </div>
                             </div>
 
                             {/* Tab selector for review details */}

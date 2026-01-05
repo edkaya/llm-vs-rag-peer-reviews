@@ -1,4 +1,5 @@
 interface ComparisonCardProps {
+    title: string;
     comparison: {
         hallucinationDelta: number;
         groundingDelta: number;
@@ -7,7 +8,7 @@ interface ComparisonCardProps {
     };
 }
 
-export function ComparisonCard({ comparison }: ComparisonCardProps) {
+export function ComparisonCard({ title, comparison }: ComparisonCardProps) {
     return (
         <div
             style={{
@@ -18,7 +19,7 @@ export function ComparisonCard({ comparison }: ComparisonCardProps) {
                 minWidth: 280
             }}
         >
-            <h3 style={{ margin: '0 0 12px 0', color: '#6366f1' }}>RAG vs NoRAG Delta</h3>
+            <h3 style={{ margin: '0 0 12px 0', color: '#6366f1' }}>{title} (RAG - NoRAG)</h3>
             <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px 0' }}>
                 Negative hallucination = RAG better | Positive grounding = RAG better
             </p>

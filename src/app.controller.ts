@@ -52,7 +52,7 @@ export class AppController {
                 error: 'Please provide claim (body) and paperId (query param)'
             };
         }
-        return this.experimentService.testNLI(claim, paperId);
+        return this.experimentService.testNLI(paperId, claim);
     }
 
     // Test LLM Judge on a single claim against a paper (Hallucination Detection)
@@ -63,7 +63,7 @@ export class AppController {
                 error: 'Please provide claim (body) and paperId (query param)'
             };
         }
-        return this.experimentService.testLLMJudge(claim, paperId);
+        return this.experimentService.testLLMJudge(paperId, claim);
     }
 
     // Test Embedding Similarity on a single claim against a paper (Hallucination Detection)
@@ -74,7 +74,7 @@ export class AppController {
                 error: 'Please provide claim (body) and paperId (query param)'
             };
         }
-        return this.experimentService.testEmbeddingSimilarity(claim, paperId);
+        return this.experimentService.testEmbeddingSimilarity(paperId, claim);
     }
 
     // Compare all three hallucination detection methods on the same claim
@@ -85,7 +85,7 @@ export class AppController {
                 error: 'Please provide claim (body) and paperId (query param)'
             };
         }
-        return this.experimentService.compareAllHallucinationMethods(claim, paperId);
+        return this.experimentService.compareAllHallucinationMethods(paperId, claim);
     }
 
     // Test pipeline with claim extraction and validation

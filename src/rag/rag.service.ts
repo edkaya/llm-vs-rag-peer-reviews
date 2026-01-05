@@ -136,22 +136,27 @@ export class RagService {
         // Embed the target paper's abstract to find similar papers
         const queryVector = await this.embeddingService.embedChunk(paper.abstract);
 
-        // Search human_reviews collection, excluding this paper's reviews
-        const results = await this.vectorStoreService.searchHumanReviewsExcluding(queryVector, paper.id, this.topK);
+        try {
+            // Search human_reviews collection, excluding this paper's reviews
+            const results = await this.vectorStoreService.searchHumanReviewsExcluding(queryVector, paper.id, this.topK);
 
-        if (results.length === 0) {
-            this.logger.warn(`No cross-paper reviews found for paper ${paper.id}`);
-            return '';
+            if (results.length === 0) {
+                this.logger.warn(`No cross-paper reviews found for paper ${paper.id}`);
+                return '';
+            }
+
+            // Format retrieved reviews with source paper info and abstract
+            const formattedReviews = results.map(
+                (r) => `[From similar paper: "${r.paperTitle}"]\nAbstract: ${r.paperAbstract}\n\n${r.reviewText}`
+            );
+
+            // Deduplicate and join
+            const uniqueReviews = [...new Set(formattedReviews)];
+            return uniqueReviews.join('\n\n---\n\n');
+        } catch (error) {
+            this.logger.error(`Error retrieving cross-paper reviews for paper ${paper.id}: ${error}`);
+            return 'No cross-paper review context available.';
         }
-
-        // Format retrieved reviews with source paper info and abstract
-        const formattedReviews = results.map(
-            (r) => `[From similar paper: "${r.paperTitle}"]\nAbstract: ${r.paperAbstract}\n\n${r.reviewText}`
-        );
-
-        // Deduplicate and join
-        const uniqueReviews = [...new Set(formattedReviews)];
-        return uniqueReviews.join('\n\n---\n\n');
     }
 
     async generateReviewWithRag(paper: Paper): Promise<string> {

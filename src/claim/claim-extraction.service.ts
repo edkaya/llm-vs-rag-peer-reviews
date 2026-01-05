@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AnthropicProvider, createAnthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import { AnthropicProvider, createAnthropic } from '@ai-sdk/anthropic';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
@@ -58,6 +58,7 @@ export class ClaimExtractionService {
                         return { claims: parsedClaims };
                     } catch {
                         this.logger.error('Failed to parse stringified claims');
+                        return { claims: [] };
                     }
                 }
             }

@@ -83,44 +83,54 @@ export class LLMJudgeService {
         return experimental_output;
     }
 
-    async detectSingleHallucination(claim: string, paper: Paper): Promise<LLMJudgeResult> {
+    async detectSingleHallucination(claim: string, paperId: string): Promise<LLMJudgeResult> {
         // Embed the claim
         const claimEmbedding = await this.embeddingService.embedChunk(claim);
 
         // Retrieve relevant chunks
-        const chunks = await this.vectorStoreService.search(claimEmbedding, paper.id, this.topK);
+        try {
+            const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, this.topK);
+            if (chunks.length === 0) {
+                return {
+                    claim,
+                    verdict: 'NOT_SUPPORTED',
+                    confidence: 1,
+                    explanation: 'No relevant evidence found in the paper',
+                    evidenceChunks: [],
+                    isHallucination: true
+                };
+            }
 
-        if (chunks.length === 0) {
+            const evidenceChunks = chunks.map((c) => c.content);
+
+            // Ask LLM to judge
+            const verdict = await this.judgeClaimAgainstEvidence(claim, evidenceChunks);
+
+            return {
+                claim,
+                verdict: verdict.verdict,
+                confidence: verdict.confidence,
+                explanation: verdict.explanation,
+                relevantQuote: verdict.relevantQuote,
+                evidenceChunks,
+                isHallucination: verdict.verdict === 'NOT_SUPPORTED' || verdict.verdict === 'CONTRADICTED'
+            };
+        } catch (error) {
             return {
                 claim,
                 verdict: 'NOT_SUPPORTED',
                 confidence: 1,
-                explanation: 'No relevant evidence found in the paper',
+                explanation: `Error during hallucination detection: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 evidenceChunks: [],
                 isHallucination: true
             };
         }
-
-        const evidenceChunks = chunks.map((c) => c.content);
-
-        // Ask LLM to judge
-        const verdict = await this.judgeClaimAgainstEvidence(claim, evidenceChunks, paper);
-
-        return {
-            claim,
-            verdict: verdict.verdict,
-            confidence: verdict.confidence,
-            explanation: verdict.explanation,
-            relevantQuote: verdict.relevantQuote,
-            evidenceChunks,
-            isHallucination: verdict.verdict === 'NOT_SUPPORTED' || verdict.verdict === 'CONTRADICTED'
-        };
     }
 
-    async detectHallucination(claims: string[], paper: Paper): Promise<LLMJudgeResult[]> {
+    async detectHallucination(claims: string[], paperId: string): Promise<LLMJudgeResult[]> {
         const results: LLMJudgeResult[] = [];
         for (const claim of claims) {
-            const result = await this.detectSingleHallucination(claim, paper);
+            const result = await this.detectSingleHallucination(claim, paperId);
             results.push(result);
             this.logger.log(`Judged claim: "${claim.substring(0, 50)}..." → ${result.verdict}`);
         }

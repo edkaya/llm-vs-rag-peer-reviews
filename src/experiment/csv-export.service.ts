@@ -22,14 +22,14 @@ export class CsvExportService {
     }
 
     /**
-     * Export batch experiment results to CSV
+     * Export batch experiment results to CSV with dual detection metrics
      */
     exportBatchResultsToCsv(batchResult: BatchExperimentResult): string {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
         const filename = `results_${timestamp}_${batchResult.experimentId.slice(0, 8)}.csv`;
         const filepath = path.join(this.resultsPath, filename);
 
-        // CSV headers
+        // CSV headers with dual detection columns
         const headers = [
             'paper_id',
             'paper_title',
@@ -37,39 +37,59 @@ export class CsvExportService {
             'review_norag',
             'review_rag',
             'human_reviews',
-            // NoRAG metrics
-            'norag_hallucination_rate',
-            'norag_grounding_score',
-            'norag_claim_density',
-            'norag_avg_confidence',
-            // NoRAG claim stats
+            // Claim stats (shared - same claims used for both detectors)
             'norag_claims_extracted',
             'norag_claims_validated',
             'norag_claims_corrected',
-            // NoRAG verdict counts
-            'norag_supported',
-            'norag_partially_supported',
-            'norag_not_supported',
-            'norag_contradicted',
-            // RAG metrics
-            'rag_hallucination_rate',
-            'rag_grounding_score',
-            'rag_claim_density',
-            'rag_avg_confidence',
-            // RAG claim stats
             'rag_claims_extracted',
             'rag_claims_validated',
             'rag_claims_corrected',
-            // RAG verdict counts
-            'rag_supported',
-            'rag_partially_supported',
-            'rag_not_supported',
-            'rag_contradicted',
-            // Deltas
-            'hallucination_delta',
-            'grounding_delta',
-            'claim_density_delta',
-            'confidence_delta'
+            // LLM Judge - NoRAG metrics
+            'llm_norag_hallucination_rate',
+            'llm_norag_grounding_score',
+            'llm_norag_claim_density',
+            'llm_norag_avg_confidence',
+            'llm_norag_supported',
+            'llm_norag_partially_supported',
+            'llm_norag_not_supported',
+            'llm_norag_contradicted',
+            // LLM Judge - RAG metrics
+            'llm_rag_hallucination_rate',
+            'llm_rag_grounding_score',
+            'llm_rag_claim_density',
+            'llm_rag_avg_confidence',
+            'llm_rag_supported',
+            'llm_rag_partially_supported',
+            'llm_rag_not_supported',
+            'llm_rag_contradicted',
+            // LLM Judge - Deltas
+            'llm_hallucination_delta',
+            'llm_grounding_delta',
+            'llm_claim_density_delta',
+            'llm_confidence_delta',
+            // NLI - NoRAG metrics
+            'nli_norag_hallucination_rate',
+            'nli_norag_grounding_score',
+            'nli_norag_claim_density',
+            'nli_norag_avg_confidence',
+            'nli_norag_supported',
+            'nli_norag_partially_supported',
+            'nli_norag_not_supported',
+            'nli_norag_contradicted',
+            // NLI - RAG metrics
+            'nli_rag_hallucination_rate',
+            'nli_rag_grounding_score',
+            'nli_rag_claim_density',
+            'nli_rag_avg_confidence',
+            'nli_rag_supported',
+            'nli_rag_partially_supported',
+            'nli_rag_not_supported',
+            'nli_rag_contradicted',
+            // NLI - Deltas
+            'nli_hallucination_delta',
+            'nli_grounding_delta',
+            'nli_claim_density_delta',
+            'nli_confidence_delta'
         ];
 
         // Build CSV rows from experiment results
@@ -82,44 +102,64 @@ export class CsvExportService {
                 this.escapeCsvField(result.noRag.review),
                 this.escapeCsvField(result.rag.review),
                 this.escapeCsvField(result.humanReviews.join(' | ')),
-                // NoRAG metrics
-                this.formatDecimal(result.noRag.metrics.hallucinationRate),
-                this.formatDecimal(result.noRag.metrics.groundingScore),
-                this.formatDecimal(result.noRag.metrics.claimDensity),
-                this.formatDecimal(result.noRag.metrics.avgConfidence),
-                // NoRAG claim stats
+                // Claim stats (shared)
                 result.noRag.claimStats.extractedCount.toString(),
                 result.noRag.claimStats.validatedCount.toString(),
                 result.noRag.claimStats.correctedCount.toString(),
-                // NoRAG verdict counts
-                result.noRag.metrics.verdictCounts.supported.toString(),
-                result.noRag.metrics.verdictCounts.partiallySupported.toString(),
-                result.noRag.metrics.verdictCounts.notSupported.toString(),
-                result.noRag.metrics.verdictCounts.contradicted.toString(),
-                // RAG metrics
-                this.formatDecimal(result.rag.metrics.hallucinationRate),
-                this.formatDecimal(result.rag.metrics.groundingScore),
-                this.formatDecimal(result.rag.metrics.claimDensity),
-                this.formatDecimal(result.rag.metrics.avgConfidence),
-                // RAG claim stats
                 result.rag.claimStats.extractedCount.toString(),
                 result.rag.claimStats.validatedCount.toString(),
                 result.rag.claimStats.correctedCount.toString(),
-                // RAG verdict counts
-                result.rag.metrics.verdictCounts.supported.toString(),
-                result.rag.metrics.verdictCounts.partiallySupported.toString(),
-                result.rag.metrics.verdictCounts.notSupported.toString(),
-                result.rag.metrics.verdictCounts.contradicted.toString(),
-                // Deltas
-                this.formatDecimal(result.comparison.hallucinationDelta),
-                this.formatDecimal(result.comparison.groundingDelta),
-                this.formatDecimal(result.comparison.claimDensityDelta),
-                this.formatDecimal(result.comparison.confidenceDelta)
+                // LLM Judge - NoRAG metrics
+                this.formatDecimal(result.noRag.llmJudgeMetrics.hallucinationRate),
+                this.formatDecimal(result.noRag.llmJudgeMetrics.groundingScore),
+                this.formatDecimal(result.noRag.llmJudgeMetrics.claimDensity),
+                this.formatDecimal(result.noRag.llmJudgeMetrics.avgConfidence),
+                result.noRag.llmJudgeMetrics.verdictCounts.supported.toString(),
+                result.noRag.llmJudgeMetrics.verdictCounts.partiallySupported.toString(),
+                result.noRag.llmJudgeMetrics.verdictCounts.notSupported.toString(),
+                result.noRag.llmJudgeMetrics.verdictCounts.contradicted.toString(),
+                // LLM Judge - RAG metrics
+                this.formatDecimal(result.rag.llmJudgeMetrics.hallucinationRate),
+                this.formatDecimal(result.rag.llmJudgeMetrics.groundingScore),
+                this.formatDecimal(result.rag.llmJudgeMetrics.claimDensity),
+                this.formatDecimal(result.rag.llmJudgeMetrics.avgConfidence),
+                result.rag.llmJudgeMetrics.verdictCounts.supported.toString(),
+                result.rag.llmJudgeMetrics.verdictCounts.partiallySupported.toString(),
+                result.rag.llmJudgeMetrics.verdictCounts.notSupported.toString(),
+                result.rag.llmJudgeMetrics.verdictCounts.contradicted.toString(),
+                // LLM Judge - Deltas
+                this.formatDecimal(result.comparison.llmJudge.hallucinationDelta),
+                this.formatDecimal(result.comparison.llmJudge.groundingDelta),
+                this.formatDecimal(result.comparison.llmJudge.claimDensityDelta),
+                this.formatDecimal(result.comparison.llmJudge.confidenceDelta),
+                // NLI - NoRAG metrics
+                this.formatDecimal(result.noRag.nliMetrics.hallucinationRate),
+                this.formatDecimal(result.noRag.nliMetrics.groundingScore),
+                this.formatDecimal(result.noRag.nliMetrics.claimDensity),
+                this.formatDecimal(result.noRag.nliMetrics.avgConfidence),
+                result.noRag.nliMetrics.verdictCounts.supported.toString(),
+                result.noRag.nliMetrics.verdictCounts.partiallySupported.toString(),
+                result.noRag.nliMetrics.verdictCounts.notSupported.toString(),
+                result.noRag.nliMetrics.verdictCounts.contradicted.toString(),
+                // NLI - RAG metrics
+                this.formatDecimal(result.rag.nliMetrics.hallucinationRate),
+                this.formatDecimal(result.rag.nliMetrics.groundingScore),
+                this.formatDecimal(result.rag.nliMetrics.claimDensity),
+                this.formatDecimal(result.rag.nliMetrics.avgConfidence),
+                result.rag.nliMetrics.verdictCounts.supported.toString(),
+                result.rag.nliMetrics.verdictCounts.partiallySupported.toString(),
+                result.rag.nliMetrics.verdictCounts.notSupported.toString(),
+                result.rag.nliMetrics.verdictCounts.contradicted.toString(),
+                // NLI - Deltas
+                this.formatDecimal(result.comparison.nli.hallucinationDelta),
+                this.formatDecimal(result.comparison.nli.groundingDelta),
+                this.formatDecimal(result.comparison.nli.claimDensityDelta),
+                this.formatDecimal(result.comparison.nli.confidenceDelta)
             ];
             rows.push(row.join(','));
         }
 
-        // Add aggregated metrics row (empty cells for non-aggregatable fields)
+        // Add aggregated metrics row
         const aggregatedRow = [
             'AGGREGATED',
             '', // paper_title
@@ -127,39 +167,65 @@ export class CsvExportService {
             '', // review_norag
             '', // review_rag
             '', // human_reviews
-            // NoRAG metrics (aggregated)
-            this.formatDecimal(batchResult.aggregated.noRag.avgHallucinationRate),
-            this.formatDecimal(batchResult.aggregated.noRag.avgGroundingScore),
-            this.formatDecimal(batchResult.aggregated.noRag.avgClaimDensity),
-            this.formatDecimal(batchResult.aggregated.noRag.avgConfidence),
-            // NoRAG claim stats (sum across all papers)
+            // Claim stats (sum)
             this.sumField(batchResult.results, (r) => r.noRag.claimStats.extractedCount).toString(),
             this.sumField(batchResult.results, (r) => r.noRag.claimStats.validatedCount).toString(),
             this.sumField(batchResult.results, (r) => r.noRag.claimStats.correctedCount).toString(),
-            // NoRAG verdict counts (sum)
-            this.sumField(batchResult.results, (r) => r.noRag.metrics.verdictCounts.supported).toString(),
-            this.sumField(batchResult.results, (r) => r.noRag.metrics.verdictCounts.partiallySupported).toString(),
-            this.sumField(batchResult.results, (r) => r.noRag.metrics.verdictCounts.notSupported).toString(),
-            this.sumField(batchResult.results, (r) => r.noRag.metrics.verdictCounts.contradicted).toString(),
-            // RAG metrics (aggregated)
-            this.formatDecimal(batchResult.aggregated.rag.avgHallucinationRate),
-            this.formatDecimal(batchResult.aggregated.rag.avgGroundingScore),
-            this.formatDecimal(batchResult.aggregated.rag.avgClaimDensity),
-            this.formatDecimal(batchResult.aggregated.rag.avgConfidence),
-            // RAG claim stats (sum)
             this.sumField(batchResult.results, (r) => r.rag.claimStats.extractedCount).toString(),
             this.sumField(batchResult.results, (r) => r.rag.claimStats.validatedCount).toString(),
             this.sumField(batchResult.results, (r) => r.rag.claimStats.correctedCount).toString(),
-            // RAG verdict counts (sum)
-            this.sumField(batchResult.results, (r) => r.rag.metrics.verdictCounts.supported).toString(),
-            this.sumField(batchResult.results, (r) => r.rag.metrics.verdictCounts.partiallySupported).toString(),
-            this.sumField(batchResult.results, (r) => r.rag.metrics.verdictCounts.notSupported).toString(),
-            this.sumField(batchResult.results, (r) => r.rag.metrics.verdictCounts.contradicted).toString(),
-            // Deltas
-            this.formatDecimal(batchResult.aggregated.deltas.hallucinationRate),
-            this.formatDecimal(batchResult.aggregated.deltas.groundingScore),
-            this.formatDecimal(batchResult.aggregated.deltas.claimDensity),
-            this.formatDecimal(batchResult.aggregated.deltas.confidence)
+            // LLM Judge - NoRAG aggregated
+            this.formatDecimal(batchResult.aggregated.llmJudge.noRag.avgHallucinationRate),
+            this.formatDecimal(batchResult.aggregated.llmJudge.noRag.avgGroundingScore),
+            this.formatDecimal(batchResult.aggregated.llmJudge.noRag.avgClaimDensity),
+            this.formatDecimal(batchResult.aggregated.llmJudge.noRag.avgConfidence),
+            this.sumField(batchResult.results, (r) => r.noRag.llmJudgeMetrics.verdictCounts.supported).toString(),
+            this.sumField(
+                batchResult.results,
+                (r) => r.noRag.llmJudgeMetrics.verdictCounts.partiallySupported
+            ).toString(),
+            this.sumField(batchResult.results, (r) => r.noRag.llmJudgeMetrics.verdictCounts.notSupported).toString(),
+            this.sumField(batchResult.results, (r) => r.noRag.llmJudgeMetrics.verdictCounts.contradicted).toString(),
+            // LLM Judge - RAG aggregated
+            this.formatDecimal(batchResult.aggregated.llmJudge.rag.avgHallucinationRate),
+            this.formatDecimal(batchResult.aggregated.llmJudge.rag.avgGroundingScore),
+            this.formatDecimal(batchResult.aggregated.llmJudge.rag.avgClaimDensity),
+            this.formatDecimal(batchResult.aggregated.llmJudge.rag.avgConfidence),
+            this.sumField(batchResult.results, (r) => r.rag.llmJudgeMetrics.verdictCounts.supported).toString(),
+            this.sumField(
+                batchResult.results,
+                (r) => r.rag.llmJudgeMetrics.verdictCounts.partiallySupported
+            ).toString(),
+            this.sumField(batchResult.results, (r) => r.rag.llmJudgeMetrics.verdictCounts.notSupported).toString(),
+            this.sumField(batchResult.results, (r) => r.rag.llmJudgeMetrics.verdictCounts.contradicted).toString(),
+            // LLM Judge - Deltas aggregated
+            this.formatDecimal(batchResult.aggregated.llmJudge.deltas.hallucinationRate),
+            this.formatDecimal(batchResult.aggregated.llmJudge.deltas.groundingScore),
+            this.formatDecimal(batchResult.aggregated.llmJudge.deltas.claimDensity),
+            this.formatDecimal(batchResult.aggregated.llmJudge.deltas.confidence),
+            // NLI - NoRAG aggregated
+            this.formatDecimal(batchResult.aggregated.nli.noRag.avgHallucinationRate),
+            this.formatDecimal(batchResult.aggregated.nli.noRag.avgGroundingScore),
+            this.formatDecimal(batchResult.aggregated.nli.noRag.avgClaimDensity),
+            this.formatDecimal(batchResult.aggregated.nli.noRag.avgConfidence),
+            this.sumField(batchResult.results, (r) => r.noRag.nliMetrics.verdictCounts.supported).toString(),
+            this.sumField(batchResult.results, (r) => r.noRag.nliMetrics.verdictCounts.partiallySupported).toString(),
+            this.sumField(batchResult.results, (r) => r.noRag.nliMetrics.verdictCounts.notSupported).toString(),
+            this.sumField(batchResult.results, (r) => r.noRag.nliMetrics.verdictCounts.contradicted).toString(),
+            // NLI - RAG aggregated
+            this.formatDecimal(batchResult.aggregated.nli.rag.avgHallucinationRate),
+            this.formatDecimal(batchResult.aggregated.nli.rag.avgGroundingScore),
+            this.formatDecimal(batchResult.aggregated.nli.rag.avgClaimDensity),
+            this.formatDecimal(batchResult.aggregated.nli.rag.avgConfidence),
+            this.sumField(batchResult.results, (r) => r.rag.nliMetrics.verdictCounts.supported).toString(),
+            this.sumField(batchResult.results, (r) => r.rag.nliMetrics.verdictCounts.partiallySupported).toString(),
+            this.sumField(batchResult.results, (r) => r.rag.nliMetrics.verdictCounts.notSupported).toString(),
+            this.sumField(batchResult.results, (r) => r.rag.nliMetrics.verdictCounts.contradicted).toString(),
+            // NLI - Deltas aggregated
+            this.formatDecimal(batchResult.aggregated.nli.deltas.hallucinationRate),
+            this.formatDecimal(batchResult.aggregated.nli.deltas.groundingScore),
+            this.formatDecimal(batchResult.aggregated.nli.deltas.claimDensity),
+            this.formatDecimal(batchResult.aggregated.nli.deltas.confidence)
         ];
         rows.push(aggregatedRow.join(','));
 
@@ -176,7 +242,7 @@ export class CsvExportService {
     }
 
     /**
-     * Export single experiment result to CSV
+     * Export single experiment result to CSV with dual detection metrics
      */
     exportSingleResultToCsv(result: PaperExperimentResult): string {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
@@ -190,39 +256,59 @@ export class CsvExportService {
             'review_norag',
             'review_rag',
             'human_reviews',
-            // NoRAG metrics
-            'norag_hallucination_rate',
-            'norag_grounding_score',
-            'norag_claim_density',
-            'norag_avg_confidence',
-            // NoRAG claim stats
+            // Claim stats
             'norag_claims_extracted',
             'norag_claims_validated',
             'norag_claims_corrected',
-            // NoRAG verdict counts
-            'norag_supported',
-            'norag_partially_supported',
-            'norag_not_supported',
-            'norag_contradicted',
-            // RAG metrics
-            'rag_hallucination_rate',
-            'rag_grounding_score',
-            'rag_claim_density',
-            'rag_avg_confidence',
-            // RAG claim stats
             'rag_claims_extracted',
             'rag_claims_validated',
             'rag_claims_corrected',
-            // RAG verdict counts
-            'rag_supported',
-            'rag_partially_supported',
-            'rag_not_supported',
-            'rag_contradicted',
-            // Deltas
-            'hallucination_delta',
-            'grounding_delta',
-            'claim_density_delta',
-            'confidence_delta'
+            // LLM Judge - NoRAG metrics
+            'llm_norag_hallucination_rate',
+            'llm_norag_grounding_score',
+            'llm_norag_claim_density',
+            'llm_norag_avg_confidence',
+            'llm_norag_supported',
+            'llm_norag_partially_supported',
+            'llm_norag_not_supported',
+            'llm_norag_contradicted',
+            // LLM Judge - RAG metrics
+            'llm_rag_hallucination_rate',
+            'llm_rag_grounding_score',
+            'llm_rag_claim_density',
+            'llm_rag_avg_confidence',
+            'llm_rag_supported',
+            'llm_rag_partially_supported',
+            'llm_rag_not_supported',
+            'llm_rag_contradicted',
+            // LLM Judge - Deltas
+            'llm_hallucination_delta',
+            'llm_grounding_delta',
+            'llm_claim_density_delta',
+            'llm_confidence_delta',
+            // NLI - NoRAG metrics
+            'nli_norag_hallucination_rate',
+            'nli_norag_grounding_score',
+            'nli_norag_claim_density',
+            'nli_norag_avg_confidence',
+            'nli_norag_supported',
+            'nli_norag_partially_supported',
+            'nli_norag_not_supported',
+            'nli_norag_contradicted',
+            // NLI - RAG metrics
+            'nli_rag_hallucination_rate',
+            'nli_rag_grounding_score',
+            'nli_rag_claim_density',
+            'nli_rag_avg_confidence',
+            'nli_rag_supported',
+            'nli_rag_partially_supported',
+            'nli_rag_not_supported',
+            'nli_rag_contradicted',
+            // NLI - Deltas
+            'nli_hallucination_delta',
+            'nli_grounding_delta',
+            'nli_claim_density_delta',
+            'nli_confidence_delta'
         ];
 
         const row = [
@@ -232,39 +318,59 @@ export class CsvExportService {
             this.escapeCsvField(result.noRag.review),
             this.escapeCsvField(result.rag.review),
             this.escapeCsvField(result.humanReviews.join(' | ')),
-            // NoRAG metrics
-            this.formatDecimal(result.noRag.metrics.hallucinationRate),
-            this.formatDecimal(result.noRag.metrics.groundingScore),
-            this.formatDecimal(result.noRag.metrics.claimDensity),
-            this.formatDecimal(result.noRag.metrics.avgConfidence),
-            // NoRAG claim stats
+            // Claim stats
             result.noRag.claimStats.extractedCount.toString(),
             result.noRag.claimStats.validatedCount.toString(),
             result.noRag.claimStats.correctedCount.toString(),
-            // NoRAG verdict counts
-            result.noRag.metrics.verdictCounts.supported.toString(),
-            result.noRag.metrics.verdictCounts.partiallySupported.toString(),
-            result.noRag.metrics.verdictCounts.notSupported.toString(),
-            result.noRag.metrics.verdictCounts.contradicted.toString(),
-            // RAG metrics
-            this.formatDecimal(result.rag.metrics.hallucinationRate),
-            this.formatDecimal(result.rag.metrics.groundingScore),
-            this.formatDecimal(result.rag.metrics.claimDensity),
-            this.formatDecimal(result.rag.metrics.avgConfidence),
-            // RAG claim stats
             result.rag.claimStats.extractedCount.toString(),
             result.rag.claimStats.validatedCount.toString(),
             result.rag.claimStats.correctedCount.toString(),
-            // RAG verdict counts
-            result.rag.metrics.verdictCounts.supported.toString(),
-            result.rag.metrics.verdictCounts.partiallySupported.toString(),
-            result.rag.metrics.verdictCounts.notSupported.toString(),
-            result.rag.metrics.verdictCounts.contradicted.toString(),
-            // Deltas
-            this.formatDecimal(result.comparison.hallucinationDelta),
-            this.formatDecimal(result.comparison.groundingDelta),
-            this.formatDecimal(result.comparison.claimDensityDelta),
-            this.formatDecimal(result.comparison.confidenceDelta)
+            // LLM Judge - NoRAG metrics
+            this.formatDecimal(result.noRag.llmJudgeMetrics.hallucinationRate),
+            this.formatDecimal(result.noRag.llmJudgeMetrics.groundingScore),
+            this.formatDecimal(result.noRag.llmJudgeMetrics.claimDensity),
+            this.formatDecimal(result.noRag.llmJudgeMetrics.avgConfidence),
+            result.noRag.llmJudgeMetrics.verdictCounts.supported.toString(),
+            result.noRag.llmJudgeMetrics.verdictCounts.partiallySupported.toString(),
+            result.noRag.llmJudgeMetrics.verdictCounts.notSupported.toString(),
+            result.noRag.llmJudgeMetrics.verdictCounts.contradicted.toString(),
+            // LLM Judge - RAG metrics
+            this.formatDecimal(result.rag.llmJudgeMetrics.hallucinationRate),
+            this.formatDecimal(result.rag.llmJudgeMetrics.groundingScore),
+            this.formatDecimal(result.rag.llmJudgeMetrics.claimDensity),
+            this.formatDecimal(result.rag.llmJudgeMetrics.avgConfidence),
+            result.rag.llmJudgeMetrics.verdictCounts.supported.toString(),
+            result.rag.llmJudgeMetrics.verdictCounts.partiallySupported.toString(),
+            result.rag.llmJudgeMetrics.verdictCounts.notSupported.toString(),
+            result.rag.llmJudgeMetrics.verdictCounts.contradicted.toString(),
+            // LLM Judge - Deltas
+            this.formatDecimal(result.comparison.llmJudge.hallucinationDelta),
+            this.formatDecimal(result.comparison.llmJudge.groundingDelta),
+            this.formatDecimal(result.comparison.llmJudge.claimDensityDelta),
+            this.formatDecimal(result.comparison.llmJudge.confidenceDelta),
+            // NLI - NoRAG metrics
+            this.formatDecimal(result.noRag.nliMetrics.hallucinationRate),
+            this.formatDecimal(result.noRag.nliMetrics.groundingScore),
+            this.formatDecimal(result.noRag.nliMetrics.claimDensity),
+            this.formatDecimal(result.noRag.nliMetrics.avgConfidence),
+            result.noRag.nliMetrics.verdictCounts.supported.toString(),
+            result.noRag.nliMetrics.verdictCounts.partiallySupported.toString(),
+            result.noRag.nliMetrics.verdictCounts.notSupported.toString(),
+            result.noRag.nliMetrics.verdictCounts.contradicted.toString(),
+            // NLI - RAG metrics
+            this.formatDecimal(result.rag.nliMetrics.hallucinationRate),
+            this.formatDecimal(result.rag.nliMetrics.groundingScore),
+            this.formatDecimal(result.rag.nliMetrics.claimDensity),
+            this.formatDecimal(result.rag.nliMetrics.avgConfidence),
+            result.rag.nliMetrics.verdictCounts.supported.toString(),
+            result.rag.nliMetrics.verdictCounts.partiallySupported.toString(),
+            result.rag.nliMetrics.verdictCounts.notSupported.toString(),
+            result.rag.nliMetrics.verdictCounts.contradicted.toString(),
+            // NLI - Deltas
+            this.formatDecimal(result.comparison.nli.hallucinationDelta),
+            this.formatDecimal(result.comparison.nli.groundingDelta),
+            this.formatDecimal(result.comparison.nli.claimDensityDelta),
+            this.formatDecimal(result.comparison.nli.confidenceDelta)
         ];
 
         const csvContent = [headers.join(','), row.join(',')].join('\n');

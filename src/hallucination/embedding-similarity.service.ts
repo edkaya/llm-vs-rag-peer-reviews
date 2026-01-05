@@ -26,7 +26,7 @@ export class EmbeddingSimilarityService {
         const claimEmbedding = await this.embeddingService.embedChunk(claim);
 
         // 2. Find most similar chunks from the paper
-        const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, 1);
+        const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, 5);
 
         if (chunks.length === 0) {
             return {

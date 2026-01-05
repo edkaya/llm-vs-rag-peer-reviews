@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LLMJudgeResult } from '../hallucination/llm-judge.service';
+import { NLIResult } from '../hallucination/nli.service';
 import { ReviewMetrics, VerdictCounts } from './types';
 
 @Injectable()
@@ -81,6 +82,58 @@ export class MetricsService {
     }
 
     /**
+     * Calculate metrics from NLI results
+     * NLI has different verdicts: SUPPORTED, CONTRADICTED, UNVERIFIABLE
+     * Maps to our standard metrics format
+     */
+    calculateMetricsFromNLI(nliResults: NLIResult[], reviewText: string): ReviewMetrics {
+        const totalClaims = nliResults.length;
+        const reviewWordCount = this.countWords(reviewText);
+
+        // Count NLI verdicts and map to our standard format
+        const verdictCounts = this.countNLIVerdicts(nliResults);
+
+        if (totalClaims === 0) {
+            return {
+                hallucinationRate: 0,
+                groundingScore: 0,
+                claimDensity: 0,
+                avgConfidence: 0,
+                totalClaims: 0,
+                reviewWordCount,
+                verdictCounts
+            };
+        }
+
+        // NLI mapping:
+        // - SUPPORTED → supported
+        // - UNVERIFIABLE → maps to notSupported (can't verify = potential hallucination)
+        // - CONTRADICTED → contradicted
+
+        // Hallucination Rate = (UNVERIFIABLE + CONTRADICTED) / Total
+        const hallucinationRate = (verdictCounts.notSupported + verdictCounts.contradicted) / totalClaims;
+
+        // Grounding Score = SUPPORTED / Total (no partial support in NLI)
+        const groundingScore = verdictCounts.supported / totalClaims;
+
+        // Claim Density = Total Claims / Word Count
+        const claimDensity = reviewWordCount > 0 ? totalClaims / reviewWordCount : 0;
+
+        // Average Confidence = use entailment score as confidence proxy
+        const avgConfidence = this.calculateNLIAverageConfidence(nliResults);
+
+        return {
+            hallucinationRate: this.round(hallucinationRate),
+            groundingScore: this.round(groundingScore),
+            claimDensity: this.round(claimDensity, 4),
+            avgConfidence: this.round(avgConfidence),
+            totalClaims,
+            reviewWordCount,
+            verdictCounts
+        };
+    }
+
+    /**
      * Aggregate metrics across multiple papers for batch experiments
      */
     aggregateMetrics(metricsArray: ReviewMetrics[]): {
@@ -142,5 +195,42 @@ export class MetricsService {
     private round(value: number, decimals: number = 3): number {
         const multiplier = Math.pow(10, decimals);
         return Math.round(value * multiplier) / multiplier;
+    }
+
+    /**
+     * Count NLI verdicts and map to standard VerdictCounts format
+     * NLI verdicts: SUPPORTED, CONTRADICTED, UNVERIFIABLE
+     */
+    private countNLIVerdicts(nliResults: NLIResult[]): VerdictCounts {
+        const supported = nliResults.filter((r) => r.verdict === 'SUPPORTED').length;
+        const contradicted = nliResults.filter((r) => r.verdict === 'CONTRADICTED').length;
+        const unverifiable = nliResults.filter((r) => r.verdict === 'UNVERIFIABLE').length;
+
+        return {
+            supported,
+            partiallySupported: 0, // NLI doesn't have partial support
+            notSupported: unverifiable, // Map UNVERIFIABLE to notSupported
+            contradicted
+        };
+    }
+
+    /**
+     * Calculate average confidence from NLI results
+     * Uses the entailment score as a proxy for confidence
+     */
+    private calculateNLIAverageConfidence(nliResults: NLIResult[]): number {
+        if (nliResults.length === 0) return 0;
+        // Use entailment score as confidence for supported claims,
+        // and (1 - contradiction) for others to reflect certainty
+        const sum = nliResults.reduce((acc, r) => {
+            if (r.verdict === 'SUPPORTED') {
+                return acc + r.scores.entailment;
+            } else if (r.verdict === 'CONTRADICTED') {
+                return acc + r.scores.contradiction;
+            }
+            // For UNVERIFIABLE, use neutral score as uncertainty measure
+            return acc + r.scores.neutral;
+        }, 0);
+        return sum / nliResults.length;
     }
 }

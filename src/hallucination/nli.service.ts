@@ -39,7 +39,7 @@ export class NLIService implements OnModuleInit {
     ) {
         this.modelName = this.configService.get<string>('models.nli', 'Xenova/nli-deberta-v3-small');
         // Higher threshold (0.8) reduces false positives - claims need strong evidence
-        this.threshold = this.configService.get<number>('nli.threshold', 0.8);
+        this.threshold = this.configService.get<number>('nli.threshold', 0.7);
     }
 
     async onModuleInit() {
@@ -141,6 +141,7 @@ export class NLIService implements OnModuleInit {
         for (const claim of claims) {
             const result = await this.detectHallucination(claim, paperId);
             results.push(result);
+            this.logger.log(`Judged claim: "${claim.substring(0, 50)}..." → ${result.verdict}`);
         }
         return results;
     }

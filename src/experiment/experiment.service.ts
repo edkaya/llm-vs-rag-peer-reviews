@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PaperExperimentResult, ClaimAnalysis, BatchExperimentResult, ClaimPipelineStats } from './types';
+import {
+    PaperExperimentResult,
+    ClaimAnalysis,
+    BatchExperimentResult,
+    ClaimPipelineStats,
+    ReviewAnalysis
+} from './types';
 import { Paper } from '../data/types';
 import { DatasetLoaderService } from 'src/data/dataset-loader.service';
 import { RagService } from 'src/rag/rag.service';
-import { ReviewMetrics } from 'src/evaluation/types';
 import { ClaimExtractionService } from 'src/claim/claim-extraction.service';
 import { ClaimValidationService } from 'src/claim/claim-validation.service';
 import { LLMJudgeService } from 'src/hallucination/llm-judge.service';
@@ -74,15 +79,24 @@ export class ExperimentService {
         this.logger.log('=== Running NoRAG Pipeline ===');
         const noRagAnalysis = await this.runAnalysisPipeline(paper, false);
 
-        // Compare metrics
-        const comparison = this.metricsService.compareMetrics(ragAnalysis.metrics, noRagAnalysis.metrics);
+        // Compare metrics for both detection methods
+        const llmJudgeComparison = this.metricsService.compareMetrics(
+            ragAnalysis.llmJudgeMetrics,
+            noRagAnalysis.llmJudgeMetrics
+        );
+        const nliComparison = this.metricsService.compareMetrics(ragAnalysis.nliMetrics, noRagAnalysis.nliMetrics);
 
         this.logger.log('Experiment complete!');
-        this.logger.log(`RAG Hallucination Rate: ${ragAnalysis.metrics.hallucinationRate}`);
-        this.logger.log(`NoRAG Hallucination Rate: ${noRagAnalysis.metrics.hallucinationRate}`);
-        this.logger.log(`Delta: ${comparison.hallucinationDelta} (negative Delta = RAG better)`);
+        this.logger.log('=== LLM Judge Results ===');
+        this.logger.log(`RAG Hallucination Rate: ${ragAnalysis.llmJudgeMetrics.hallucinationRate}`);
+        this.logger.log(`NoRAG Hallucination Rate: ${noRagAnalysis.llmJudgeMetrics.hallucinationRate}`);
+        this.logger.log(`Delta: ${llmJudgeComparison.hallucinationDelta} (negative = RAG better)`);
+        this.logger.log('=== NLI Results ===');
+        this.logger.log(`RAG Hallucination Rate: ${ragAnalysis.nliMetrics.hallucinationRate}`);
+        this.logger.log(`NoRAG Hallucination Rate: ${noRagAnalysis.nliMetrics.hallucinationRate}`);
+        this.logger.log(`Delta: ${nliComparison.hallucinationDelta} (negative = RAG better)`);
 
-        const PaperExperimentResult = {
+        const result: PaperExperimentResult = {
             paperId: paper.id,
             paperTitle: paper.title,
             paperAbstract: paper.abstract,
@@ -93,14 +107,17 @@ export class ExperimentService {
                 (r) =>
                     `**Summary:** ${r.paperSummary}\n\n**Strengths:** ${r.strengths}\n\n**Weaknesses:** ${r.weaknesses}\n\n**Comments:** ${r.comments}`
             ),
-            comparison
+            comparison: {
+                llmJudge: llmJudgeComparison,
+                nli: nliComparison
+            }
         };
 
         // Export to CSV
-        const csvPath = this.csvExportService.exportSingleResultToCsv(PaperExperimentResult);
+        const csvPath = this.csvExportService.exportSingleResultToCsv(result);
         this.logger.log(`Single experiment result exported to CSV: ${csvPath}`);
 
-        return PaperExperimentResult;
+        return result;
     }
 
     async runBatchExperiment(count: string): Promise<BatchExperimentResult> {
@@ -138,8 +155,15 @@ export class ExperimentService {
                 const ragAnalysis = await this.runAnalysisPipeline(paper, true);
                 const noRagAnalysis = await this.runAnalysisPipeline(paper, false);
 
-                // Compare metrics
-                const comparison = this.metricsService.compareMetrics(ragAnalysis.metrics, noRagAnalysis.metrics);
+                // Compare metrics for both detection methods
+                const llmJudgeComparison = this.metricsService.compareMetrics(
+                    ragAnalysis.llmJudgeMetrics,
+                    noRagAnalysis.llmJudgeMetrics
+                );
+                const nliComparison = this.metricsService.compareMetrics(
+                    ragAnalysis.nliMetrics,
+                    noRagAnalysis.nliMetrics
+                );
 
                 results.push({
                     paperId: paper.id,
@@ -152,11 +176,14 @@ export class ExperimentService {
                         (r) =>
                             `**Summary:** ${r.paperSummary}\n\n**Strengths:** ${r.strengths}\n\n**Weaknesses:** ${r.weaknesses}\n\n**Comments:** ${r.comments}`
                     ),
-                    comparison
+                    comparison: {
+                        llmJudge: llmJudgeComparison,
+                        nli: nliComparison
+                    }
                 });
 
                 this.logger.log(
-                    `Paper ${i + 1} complete: RAG=${ragAnalysis.metrics.hallucinationRate}, NoRAG=${noRagAnalysis.metrics.hallucinationRate}`
+                    `Paper ${i + 1} complete: LLM-Judge RAG=${ragAnalysis.llmJudgeMetrics.hallucinationRate}, NoRAG=${noRagAnalysis.llmJudgeMetrics.hallucinationRate}`
                 );
             } catch (error) {
                 this.logger.error(`Failed to process paper ${i}: ${error}`);
@@ -164,33 +191,63 @@ export class ExperimentService {
             }
         }
 
-        // Aggregate metrics across all papers
-        const ragMetricsArray = results.map((r) => r.rag.metrics);
-        const noRagMetricsArray = results.map((r) => r.noRag.metrics);
+        // Aggregate metrics across all papers for both detection methods
+        // LLM Judge metrics
+        const llmJudgeRagMetrics = results.map((r) => r.rag.llmJudgeMetrics);
+        const llmJudgeNoRagMetrics = results.map((r) => r.noRag.llmJudgeMetrics);
+        const aggregatedLlmJudgeRag = this.metricsService.aggregateMetrics(llmJudgeRagMetrics);
+        const aggregatedLlmJudgeNoRag = this.metricsService.aggregateMetrics(llmJudgeNoRagMetrics);
 
-        const aggregatedRag = this.metricsService.aggregateMetrics(ragMetricsArray);
-        const aggregatedNoRag = this.metricsService.aggregateMetrics(noRagMetricsArray);
+        // NLI metrics
+        const nliRagMetrics = results.map((r) => r.rag.nliMetrics);
+        const nliNoRagMetrics = results.map((r) => r.noRag.nliMetrics);
+        const aggregatedNliRag = this.metricsService.aggregateMetrics(nliRagMetrics);
+        const aggregatedNliNoRag = this.metricsService.aggregateMetrics(nliNoRagMetrics);
+
+        const round = (v: number, d = 3) => Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
 
         const aggregated = {
-            rag: aggregatedRag,
-            noRag: aggregatedNoRag,
-            deltas: {
-                hallucinationRate:
-                    Math.round((aggregatedRag.avgHallucinationRate - aggregatedNoRag.avgHallucinationRate) * 1000) /
-                    1000,
-                groundingScore:
-                    Math.round((aggregatedRag.avgGroundingScore - aggregatedNoRag.avgGroundingScore) * 1000) / 1000,
-                claimDensity:
-                    Math.round((aggregatedRag.avgClaimDensity - aggregatedNoRag.avgClaimDensity) * 10000) / 10000,
-                confidence: Math.round((aggregatedRag.avgConfidence - aggregatedNoRag.avgConfidence) * 1000) / 1000
+            llmJudge: {
+                rag: aggregatedLlmJudgeRag,
+                noRag: aggregatedLlmJudgeNoRag,
+                deltas: {
+                    hallucinationRate: round(
+                        aggregatedLlmJudgeRag.avgHallucinationRate - aggregatedLlmJudgeNoRag.avgHallucinationRate
+                    ),
+                    groundingScore: round(
+                        aggregatedLlmJudgeRag.avgGroundingScore - aggregatedLlmJudgeNoRag.avgGroundingScore
+                    ),
+                    claimDensity: round(
+                        aggregatedLlmJudgeRag.avgClaimDensity - aggregatedLlmJudgeNoRag.avgClaimDensity,
+                        4
+                    ),
+                    confidence: round(aggregatedLlmJudgeRag.avgConfidence - aggregatedLlmJudgeNoRag.avgConfidence)
+                }
+            },
+            nli: {
+                rag: aggregatedNliRag,
+                noRag: aggregatedNliNoRag,
+                deltas: {
+                    hallucinationRate: round(
+                        aggregatedNliRag.avgHallucinationRate - aggregatedNliNoRag.avgHallucinationRate
+                    ),
+                    groundingScore: round(aggregatedNliRag.avgGroundingScore - aggregatedNliNoRag.avgGroundingScore),
+                    claimDensity: round(aggregatedNliRag.avgClaimDensity - aggregatedNliNoRag.avgClaimDensity, 4),
+                    confidence: round(aggregatedNliRag.avgConfidence - aggregatedNliNoRag.avgConfidence)
+                }
             }
         };
 
         this.logger.log('\n=== Batch Experiment Complete ===');
         this.logger.log(`Processed ${results.length}/${numPapers} papers successfully`);
-        this.logger.log(`Avg RAG Hallucination Rate: ${aggregatedRag.avgHallucinationRate}`);
-        this.logger.log(`Avg NoRAG Hallucination Rate: ${aggregatedNoRag.avgHallucinationRate}`);
-        this.logger.log(`Delta: ${aggregated.deltas.hallucinationRate} (negative Delta = RAG better)`);
+        this.logger.log('=== LLM Judge Aggregated ===');
+        this.logger.log(`Avg RAG Hallucination Rate: ${aggregatedLlmJudgeRag.avgHallucinationRate}`);
+        this.logger.log(`Avg NoRAG Hallucination Rate: ${aggregatedLlmJudgeNoRag.avgHallucinationRate}`);
+        this.logger.log(`Delta: ${aggregated.llmJudge.deltas.hallucinationRate} (negative = RAG better)`);
+        this.logger.log('=== NLI Aggregated ===');
+        this.logger.log(`Avg RAG Hallucination Rate: ${aggregatedNliRag.avgHallucinationRate}`);
+        this.logger.log(`Avg NoRAG Hallucination Rate: ${aggregatedNliNoRag.avgHallucinationRate}`);
+        this.logger.log(`Delta: ${aggregated.nli.deltas.hallucinationRate} (negative = RAG better)`);
 
         const batchExperimentResult = {
             experimentId,
@@ -207,11 +264,8 @@ export class ExperimentService {
         return batchExperimentResult;
     }
 
-    // Helper method to run the full analysis pipeline
-    private async runAnalysisPipeline(
-        paper: Paper,
-        useRag: boolean
-    ): Promise<{ review: string; claims: ClaimAnalysis[]; metrics: ReviewMetrics; claimStats: ClaimPipelineStats }> {
+    // Helper method to run the full analysis pipeline with dual detection
+    private async runAnalysisPipeline(paper: Paper, useRag: boolean): Promise<ReviewAnalysis> {
         // Generate review based on mode
         let review: string;
         if (useRag) {
@@ -246,21 +300,40 @@ export class ExperimentService {
                 `(${correctedCount} corrected)`
         );
 
-        // Run LLM Judge on final claims
+        // Run BOTH hallucination detectors on the same claims
         const claimTexts = finalClaims.map((c) => c.text);
-        const judgeResults = await this.llmJudgeService.detectHallucination(claimTexts, paper);
 
-        // Build claim analysis array
+        // Run LLM Judge
+        this.logger.log('Running LLM Judge hallucination detection...');
+        const judgeResults = await this.llmJudgeService.detectHallucination(claimTexts, paper.id);
+
+        // Run NLI
+        this.logger.log('Running NLI hallucination detection...');
+        const nliResults = await this.nliService.detectHallucinationsBatch(claimTexts, paper.id);
+
+        // Build claim analysis array with both detection results
         const claims: ClaimAnalysis[] = finalClaims.map((claim, idx) => ({
             text: claim.text,
             category: claim.category,
-            verdict: judgeResults[idx].verdict,
-            confidence: judgeResults[idx].confidence,
-            explanation: judgeResults[idx].explanation
+            llmJudge: {
+                verdict: judgeResults[idx].verdict,
+                confidence: judgeResults[idx].confidence,
+                explanation: judgeResults[idx].explanation
+            },
+            nli: {
+                verdict: nliResults[idx].verdict,
+                scores: nliResults[idx].scores
+            }
         }));
 
-        // Calculate metrics
-        const metrics = this.metricsService.calculateMetrics(judgeResults, review);
+        // Calculate metrics for both detection methods
+        const llmJudgeMetrics = this.metricsService.calculateMetrics(judgeResults, review);
+        const nliMetrics = this.metricsService.calculateMetricsFromNLI(nliResults, review);
+
+        this.logger.log(
+            `LLM Judge: hallucination=${llmJudgeMetrics.hallucinationRate}, grounding=${llmJudgeMetrics.groundingScore}`
+        );
+        this.logger.log(`NLI: hallucination=${nliMetrics.hallucinationRate}, grounding=${nliMetrics.groundingScore}`);
 
         // Claim pipeline stats
         const claimStats: ClaimPipelineStats = {
@@ -269,7 +342,7 @@ export class ExperimentService {
             correctedCount
         };
 
-        return { review, claims, metrics, claimStats };
+        return { review, claims, llmJudgeMetrics, nliMetrics, claimStats };
     }
 
     //  ------------------------------------------------
@@ -293,8 +366,8 @@ export class ExperimentService {
 
     // Test LLM Judge for hallucination detection
     async testLLMJudge(paperId: string, claim: string) {
-        const paper = this.papers.find((p) => p.id === paperId)!;
-        const result = await this.llmJudgeService.detectSingleHallucination(claim, paper);
+        // const paper = this.papers.find((p) => p.id === paperId)!;
+        const result = await this.llmJudgeService.detectSingleHallucination(claim, paperId);
         return result;
     }
 
@@ -306,16 +379,16 @@ export class ExperimentService {
 
     // Compare all three hallucination detection methods on the same claim
     async compareAllHallucinationMethods(paperId: string, claim: string) {
-        const paper = this.papers.find((p) => p.id === paperId)!;
+        // const paper = this.papers.find((p) => p.id === paperId)!;
         const [embeddingResult, nliResult, judgeResult] = await Promise.all([
             this.embeddingSimilarityService.detectHallucination(claim, paperId),
             this.nliService.detectHallucination(claim, paperId),
-            this.llmJudgeService.detectSingleHallucination(claim, paper)
+            this.llmJudgeService.detectSingleHallucination(claim, paperId)
         ]);
 
         return {
-            claim,
-            paperId,
+            claim: claim,
+            paperId: paperId,
             methods: {
                 embeddingSimilarity: {
                     verdict: embeddingResult.verdict,

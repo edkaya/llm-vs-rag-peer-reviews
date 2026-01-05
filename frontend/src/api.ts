@@ -23,12 +23,28 @@ export interface ReviewMetrics {
     verdictCounts: VerdictCounts;
 }
 
-export interface ClaimAnalysis {
-    text: string;
-    category: string;
+export interface NLIScores {
+    entailment: number;
+    neutral: number;
+    contradiction: number;
+}
+
+export interface LLMJudgeClaimResult {
     verdict: string;
     confidence: number;
     explanation: string;
+}
+
+export interface NLIClaimResult {
+    verdict: string;
+    scores: NLIScores;
+}
+
+export interface ClaimAnalysis {
+    text: string;
+    category: string;
+    llmJudge: LLMJudgeClaimResult;
+    nli: NLIClaimResult;
 }
 
 export interface ClaimPipelineStats {
@@ -40,8 +56,16 @@ export interface ClaimPipelineStats {
 export interface ReviewAnalysis {
     review: string;
     claims: ClaimAnalysis[];
-    metrics: ReviewMetrics;
+    llmJudgeMetrics: ReviewMetrics;
+    nliMetrics: ReviewMetrics;
     claimStats: ClaimPipelineStats;
+}
+
+export interface MetricDeltas {
+    hallucinationDelta: number;
+    groundingDelta: number;
+    claimDensityDelta: number;
+    confidenceDelta: number;
 }
 
 export interface PaperExperimentResult {
@@ -53,10 +77,8 @@ export interface PaperExperimentResult {
     noRag: ReviewAnalysis;
     humanReviews: string[];
     comparison: {
-        hallucinationDelta: number;
-        groundingDelta: number;
-        claimDensityDelta: number;
-        confidenceDelta: number;
+        llmJudge: MetricDeltas;
+        nli: MetricDeltas;
     };
 }
 
@@ -67,19 +89,28 @@ export interface AggregatedMetrics {
     avgConfidence: number;
 }
 
+export interface AggregatedDeltas {
+    hallucinationRate: number;
+    groundingScore: number;
+    claimDensity: number;
+    confidence: number;
+}
+
 export interface BatchExperimentResult {
     experimentId: string;
     timestamp: string;
     totalPapers: number;
     results: PaperExperimentResult[];
     aggregated: {
-        rag: AggregatedMetrics;
-        noRag: AggregatedMetrics;
-        deltas: {
-            hallucinationRate: number;
-            groundingScore: number;
-            claimDensity: number;
-            confidence: number;
+        llmJudge: {
+            rag: AggregatedMetrics;
+            noRag: AggregatedMetrics;
+            deltas: AggregatedDeltas;
+        };
+        nli: {
+            rag: AggregatedMetrics;
+            noRag: AggregatedMetrics;
+            deltas: AggregatedDeltas;
         };
     };
 }
