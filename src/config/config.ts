@@ -6,10 +6,10 @@ export default () => ({
 
     models: {
         embedding: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
-        generation: process.env.GENERATION_MODEL || 'gpt-5.2',
-        claimExtraction: process.env.CLAIM_EXTRACTION_MODEL || 'gpt-4o-mini',
-        claimValidation: process.env.CLAIM_VALIDATION_MODEL || 'gpt-4o-mini',
-        judge: process.env.JUDGE_MODEL || 'gpt-4o',
+        generation: process.env.GENERATION_MODEL || 'gpt-4.1-2025-04-14',
+        claimExtraction: process.env.CLAIM_EXTRACTION_MODEL || 'claude-sonnet-4-5-20250929',
+        claimValidation: process.env.CLAIM_VALIDATION_MODEL || 'gpt-5-mini-2025-08-07',
+        judge: process.env.JUDGE_MODEL || 'claude-haiku-4-5-20251001',
         nli: process.env.NLI_MODEL || 'Xenova/nli-deberta-v3-small'
     },
 
@@ -30,8 +30,12 @@ export default () => ({
     },
 
     rag: {
-        topK: parseInt(process.env.TOP_K ?? '15', 10),
+        topK: parseInt(process.env.TOP_K ?? '5', 10),
         topKJudge: parseInt(process.env.TOP_K_JUDGE ?? '7', 10)
+    },
+
+    nli: {
+        threshold: parseFloat(process.env.NLI_THRESHOLD ?? '0.7')
     },
 
     output: {
