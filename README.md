@@ -303,6 +303,14 @@ The system uses different models for different tasks to avoid provider bias:
 | Claim Validation | OpenAI | GPT-5 Mini | Cross-provider validation |
 | LLM Judge | Anthropic | Claude Opus 4.5 | Deep reasoning for verdicts |
 
+## Screenshots of the Project
+
+### Overview of a Batch Experiment
+![Overview of an Experiment](screenshots/llm_vs_rag_overview.png)
+
+### Results for a Single Paper
+![Single Paper Results](screenshots/llm_vs_rag_single_paper.png)
+
 ## License
 
 UNLICENSED - Private research project
