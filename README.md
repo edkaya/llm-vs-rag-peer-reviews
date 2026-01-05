@@ -146,6 +146,14 @@ llm-vs-rag-peer-reviews/
   - OpenAI API key
   - Anthropic API key
 
+### Download dataset
+
+This project uses the **NLPeer** dataset, a multi-domain corpus of peer reviews for NLP research.
+
+**Repository**: [https://github.com/UKPLab/nlpeer](https://github.com/UKPLab/nlpeer)
+
+After downloading the dataset, create a folder called `dataset` in the root folder of this repository, and put all the data listed under `/data` folder of the nlpeer dataset you freshly downloaded.
+
 ## Installation
 
 ### 1. Clone and install dependencies
@@ -294,12 +302,6 @@ The system uses different models for different tasks to avoid provider bias:
 | Claim Extraction | Anthropic | Claude Sonnet 4.5 | Structured output accuracy & Good reasoning |
 | Claim Validation | OpenAI | GPT-5 Mini | Cross-provider validation |
 | LLM Judge | Anthropic | Claude Opus 4.5 | Deep reasoning for verdicts |
-
-## Dataset
-
-This project uses the **NLPeer** dataset, a multi-domain corpus of peer reviews for NLP research.
-
-**Repository**: [https://github.com/UKPLab/nlpeer](https://github.com/UKPLab/nlpeer)
 
 ## License
 
