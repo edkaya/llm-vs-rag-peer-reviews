@@ -100,7 +100,7 @@ llm-vs-rag-peer-reviews/
 │   ├── hallucination/             # Hallucination detection
 │   │   ├── llm-judge.service.ts         # LLM-based verdict (Anthropic)
 │   │   ├── nli.service.ts               # NLI model inference
-│   │   ├── embedding-similarity.service.ts  # Embedding-based detection
+│   │   ├── embedding-similarity.service.ts  # Embedding-based detection (not used in the experiment pipeline, only for testing)
 │   │   └── hallucination.module.ts
 │   │
 │   ├── rag/                       # RAG implementation
