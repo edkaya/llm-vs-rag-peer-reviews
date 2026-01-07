@@ -9,7 +9,7 @@ export default () => ({
         generation: process.env.GENERATION_MODEL || 'gpt-4.1-2025-04-14',
         claimExtraction: process.env.CLAIM_EXTRACTION_MODEL || 'claude-sonnet-4-5-20250929',
         claimValidation: process.env.CLAIM_VALIDATION_MODEL || 'gpt-5-mini-2025-08-07',
-        judge: process.env.JUDGE_MODEL || 'claude-haiku-4-5-20251001',
+        judge: process.env.JUDGE_MODEL || 'claude-opus-4-5-20251101',
         nli: process.env.NLI_MODEL || 'Xenova/nli-deberta-v3-small'
     },
 
