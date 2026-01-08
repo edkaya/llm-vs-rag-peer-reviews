@@ -35,7 +35,8 @@ export default () => ({
     },
 
     nli: {
-        threshold: parseFloat(process.env.NLI_THRESHOLD ?? '0.7')
+        entailmentThreshold: parseFloat(process.env.NLI_ENTAILMENT_THRESHOLD ?? '0.7'),
+        contradictionThreshold: parseFloat(process.env.NLI_CONTRADICTION_THRESHOLD ?? '0.5')
     },
 
     output: {

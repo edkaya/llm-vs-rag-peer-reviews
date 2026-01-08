@@ -11,7 +11,7 @@ export interface NLIScores {
 
 export interface NLIResult {
     claim: string;
-    verdict: 'SUPPORTED' | 'CONTRADICTED' | 'UNVERIFIABLE';
+    verdict: 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'CONTRADICTED' | 'UNVERIFIABLE';
     scores: NLIScores;
     evidenceChunk: string;
     isHallucination: boolean;
@@ -28,7 +28,8 @@ type TextClassificationPipeline = (input: string) => Promise<PipelineResult[]>;
 export class NLIService implements OnModuleInit {
     private pipeline: TextClassificationPipeline | null = null;
     private modelName: string;
-    private threshold: number;
+    private entailmentThreshold: number;
+    private contradictionThreshold: number;
     private logger = new Logger(NLIService.name);
     private isModelLoaded = false;
 
@@ -38,8 +39,8 @@ export class NLIService implements OnModuleInit {
         private embeddingService: EmbeddingService
     ) {
         this.modelName = this.configService.get<string>('models.nli', 'Xenova/nli-deberta-v3-small');
-        // Higher threshold (0.8) reduces false positives - claims need strong evidence
-        this.threshold = this.configService.get<number>('nli.threshold', 0.7);
+        this.entailmentThreshold = this.configService.get<number>('nli.entailmentThreshold', 0.7);
+        this.contradictionThreshold = this.configService.get<number>('nli.contradictionThreshold', 0.5);
     }
 
     async onModuleInit() {
@@ -80,10 +81,12 @@ export class NLIService implements OnModuleInit {
         return scores;
     }
 
-    private classifyVerdict(scores: NLIScores): 'SUPPORTED' | 'CONTRADICTED' | 'UNVERIFIABLE' {
-        if (scores.entailment > this.threshold && scores.entailment > scores.contradiction) {
+    private classifyVerdict(scores: NLIScores): 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'CONTRADICTED' | 'UNVERIFIABLE' {
+        if (scores.entailment > this.entailmentThreshold && scores.entailment > scores.contradiction) {
             return 'SUPPORTED';
-        } else if (scores.contradiction > this.threshold && scores.contradiction > scores.entailment) {
+        } else if (scores.entailment > 0.5 && scores.entailment > scores.contradiction) {
+            return 'PARTIALLY_SUPPORTED';
+        } else if (scores.contradiction > this.contradictionThreshold && scores.contradiction > scores.entailment) {
             return 'CONTRADICTED';
         }
         return 'UNVERIFIABLE';
@@ -132,7 +135,7 @@ export class NLIService implements OnModuleInit {
             verdict,
             scores: bestResult.scores,
             evidenceChunk: bestResult.chunk,
-            isHallucination: verdict !== 'SUPPORTED'
+            isHallucination: verdict === 'CONTRADICTED' || verdict === 'UNVERIFIABLE'
         };
     }
 

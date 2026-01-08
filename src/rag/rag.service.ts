@@ -27,11 +27,11 @@ export class RagService {
     }
 
     async indexPaper(paper: Paper): Promise<void> {
-        this.logger.log(`Indexing paper: ${paper.id}`);
+        this.logger.log(`Indexing paper: ${paper.title} (ID: ${paper.id})`);
 
         const existing = await this.vectorStoreService.countByPaperId(paper.id);
         if (existing > 0) {
-            this.logger.log(`Paper ${paper.id} is already indexed with ${existing} chunks. Skipping indexing.`);
+            this.logger.log(`Paper ${paper.title} is already indexed with ${existing} chunks. Skipping indexing.`);
             return;
         }
 

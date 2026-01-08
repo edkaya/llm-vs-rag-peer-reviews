@@ -19,7 +19,6 @@ export function BatchExperiment({ maxPapers }: BatchExperimentProps) {
         setResult(null);
         setProgress(0);
 
-        // Simulate progress (since we don't have real-time updates from backend)
         const progressInterval = setInterval(() => {
             setProgress((prev) => Math.min(prev + 100 / (count * 60), 95));
         }, 1000);
@@ -61,7 +60,7 @@ export function BatchExperiment({ maxPapers }: BatchExperimentProps) {
                             cursor: running ? 'not-allowed' : 'pointer'
                         }}
                     >
-                        {Array.from({ length: Math.min(maxPapers, 20) }, (_, i) => i + 1).map((n) => (
+                        {Array.from({ length: Math.min(maxPapers, 75) }, (_, i) => i + 1).map((n) => (
                             <option key={n} value={n}>
                                 {n}
                             </option>

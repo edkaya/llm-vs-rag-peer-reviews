@@ -121,7 +121,8 @@ export class ExperimentService {
     }
 
     async runBatchExperiment(count: string): Promise<BatchExperimentResult> {
-        const numPapers = Math.min(parseInt(count, 10), 50);
+        const numPapers = Math.min(parseInt(count, 10), 75);
+        this.logger.log(`Preparing to run batch experiment on ${numPapers} papers...`);
 
         // Load papers all available papers
         if (this.papers.length === 0) {

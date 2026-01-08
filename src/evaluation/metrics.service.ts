@@ -107,14 +107,15 @@ export class MetricsService {
 
         // NLI mapping:
         // - SUPPORTED → supported
+        // - PARTIALLY_SUPPORTED → partiallySupported
         // - UNVERIFIABLE → maps to notSupported (can't verify = potential hallucination)
         // - CONTRADICTED → contradicted
 
         // Hallucination Rate = (UNVERIFIABLE + CONTRADICTED) / Total
         const hallucinationRate = (verdictCounts.notSupported + verdictCounts.contradicted) / totalClaims;
 
-        // Grounding Score = SUPPORTED / Total (no partial support in NLI)
-        const groundingScore = verdictCounts.supported / totalClaims;
+        // Grounding Score = (SUPPORTED + PARTIALLY SUPPORTED) / Total
+        const groundingScore = (verdictCounts.supported + 0.5 * verdictCounts.partiallySupported) / totalClaims;
 
         // Claim Density = Total Claims / Word Count
         const claimDensity = reviewWordCount > 0 ? totalClaims / reviewWordCount : 0;
@@ -203,12 +204,13 @@ export class MetricsService {
      */
     private countNLIVerdicts(nliResults: NLIResult[]): VerdictCounts {
         const supported = nliResults.filter((r) => r.verdict === 'SUPPORTED').length;
+        const partiallySupported = nliResults.filter((r) => r.verdict === 'PARTIALLY_SUPPORTED').length;
         const contradicted = nliResults.filter((r) => r.verdict === 'CONTRADICTED').length;
         const unverifiable = nliResults.filter((r) => r.verdict === 'UNVERIFIABLE').length;
 
         return {
             supported,
-            partiallySupported: 0, // NLI doesn't have partial support
+            partiallySupported: partiallySupported, // NLI doesn't have partial support
             notSupported: unverifiable, // Map UNVERIFIABLE to notSupported
             contradicted
         };
@@ -220,10 +222,10 @@ export class MetricsService {
      */
     private calculateNLIAverageConfidence(nliResults: NLIResult[]): number {
         if (nliResults.length === 0) return 0;
-        // Use entailment score as confidence for supported claims,
+        // Use entailment score as confidence for supported / partially supported claims,
         // and (1 - contradiction) for others to reflect certainty
         const sum = nliResults.reduce((acc, r) => {
-            if (r.verdict === 'SUPPORTED') {
+            if (r.verdict === 'SUPPORTED' || r.verdict === 'PARTIALLY_SUPPORTED') {
                 return acc + r.scores.entailment;
             } else if (r.verdict === 'CONTRADICTED') {
                 return acc + r.scores.contradiction;
