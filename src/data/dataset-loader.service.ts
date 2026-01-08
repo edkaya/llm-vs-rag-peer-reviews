@@ -40,6 +40,27 @@ export class DatasetLoaderService {
         return papers;
     }
 
+    loadAllPapers(): Paper[] {
+        const papers: Paper[] = [];
+        const folders = fs
+            .readdirSync(this.datasetPath, { withFileTypes: true })
+            .filter((dirent) => dirent.isDirectory() && !dirent.name.startsWith('.'))
+            .map((dirent) => dirent.name);
+
+        for (const folder of folders) {
+            const v1Path = path.join(this.datasetPath, folder, 'v1');
+            if (!fs.existsSync(v1Path)) continue;
+
+            const paper = this.loadPaper(folder, v1Path);
+            if (paper && paper.humanReviews.length > 0) {
+                papers.push(paper);
+            }
+        }
+
+        this.logger.log(`Loaded ALL ${papers.length} papers with reviews for indexing`);
+        return papers;
+    }
+
     private loadPaper(id: string, v1Path: string): Paper | null {
         try {
             // Load meta

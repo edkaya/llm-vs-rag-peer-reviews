@@ -51,7 +51,7 @@ export class ExperimentService {
     }
 
     async runSingleExperiment(index: string): Promise<PaperExperimentResult> {
-        // Load papers all available papers
+        // Load papers for experiments (limited by maxPapers)
         if (this.papers.length === 0) {
             this.logger.log('Loading papers...');
             this.papers = this.datasetLoaderService.loadPapers();
@@ -61,9 +61,12 @@ export class ExperimentService {
         if (i >= this.papers.length) {
             throw new Error(`Index ${i} out of range. Loaded ${this.papers.length} papers.`);
         }
-        // Index all human reviews for RAG
+
+        // Index ALL human reviews for RAG (from entire dataset)
+        this.logger.log('Loading all papers for human review indexing...');
+        const allPapers = this.datasetLoaderService.loadAllPapers();
         this.logger.log('Indexing all human reviews for RAG...');
-        await this.ragService.indexAllHumanReviews(this.papers);
+        await this.ragService.indexAllHumanReviews(allPapers);
 
         const paper = this.papers[i];
         this.logger.log(`Starting experiment for paper: ${paper.title}`);
@@ -124,7 +127,7 @@ export class ExperimentService {
         const numPapers = Math.min(parseInt(count, 10), 75);
         this.logger.log(`Preparing to run batch experiment on ${numPapers} papers...`);
 
-        // Load papers all available papers
+        // Load papers for experiments (limited by maxPapers)
         if (this.papers.length === 0) {
             this.logger.log('Loading papers...');
             this.papers = this.datasetLoaderService.loadPapers();
@@ -134,9 +137,11 @@ export class ExperimentService {
             throw new Error(`Requested ${numPapers} papers but only ${this.papers.length} available.`);
         }
 
-        // Index all human reviews for RAG
+        // Index ALL human reviews for RAG (from entire dataset)
+        this.logger.log('Loading all papers for human review indexing...');
+        const allPapers = this.datasetLoaderService.loadAllPapers();
         this.logger.log('Indexing all human reviews for RAG...');
-        await this.ragService.indexAllHumanReviews(this.papers);
+        await this.ragService.indexAllHumanReviews(allPapers);
 
         const experimentId = uuidv4();
         this.logger.log(`Starting batch experiment ${experimentId} for ${numPapers} papers...`);

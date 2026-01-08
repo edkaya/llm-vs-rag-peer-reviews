@@ -24,12 +24,19 @@ export class EmbeddingService {
         return embedding;
     }
 
-    // process multiple chunks
-    async embedChunks(chunks: string[]): Promise<number[][]> {
-        const { embeddings } = await embedMany({
-            model: this.openai.embedding(this.model),
-            values: chunks
-        });
-        return embeddings;
+    // process multiple chunks with batches not to exceed token limits
+    async embedChunks(chunks: string[], batchSize = 100): Promise<number[][]> {
+        const allEmbeddings: number[][] = [];
+
+        for (let i = 0; i < chunks.length; i += batchSize) {
+            const batch = chunks.slice(i, i + batchSize);
+            const { embeddings } = await embedMany({
+                model: this.openai.embedding(this.model),
+                values: batch
+            });
+            allEmbeddings.push(...embeddings);
+        }
+
+        return allEmbeddings;
     }
 }
