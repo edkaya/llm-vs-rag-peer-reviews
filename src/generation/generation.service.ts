@@ -19,6 +19,7 @@ export class GenerationService {
 
     async generate(context: string, systemPrompt: string): Promise<string> {
         // AI SDK Docs: It is recommended to set either temperature or topP, but not both.
+        // topP is default 1.0 in OpenAI models, no need to set anyways here
         const { text } = await generateText({
             model: this.openai(this.model),
             system: systemPrompt,

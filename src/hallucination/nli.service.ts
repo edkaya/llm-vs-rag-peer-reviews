@@ -32,6 +32,7 @@ export class NLIService implements OnModuleInit {
     private contradictionThreshold: number;
     private logger = new Logger(NLIService.name);
     private isModelLoaded = false;
+    private topK: number;
 
     constructor(
         private configService: ConfigService,
@@ -41,6 +42,7 @@ export class NLIService implements OnModuleInit {
         this.modelName = this.configService.get<string>('models.nli', 'Xenova/nli-deberta-v3-small');
         this.entailmentThreshold = this.configService.get<number>('nli.entailmentThreshold', 0.7);
         this.contradictionThreshold = this.configService.get<number>('nli.contradictionThreshold', 0.5);
+        this.topK = this.configService.get<number>('rag.topKJudge', 7);
     }
 
     async onModuleInit() {
@@ -97,7 +99,7 @@ export class NLIService implements OnModuleInit {
         const claimEmbedding = await this.embeddingService.embedChunk(claim);
 
         // 2. Retrieve relevant chunks using the embedding
-        const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, 5);
+        const chunks = await this.vectorStoreService.search(claimEmbedding, paperId, this.topK);
 
         if (chunks.length === 0) {
             return {

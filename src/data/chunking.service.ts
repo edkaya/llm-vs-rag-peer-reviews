@@ -46,13 +46,16 @@ export class ChunkingService {
         const allChunks: Chunk[] = [];
 
         for (const section of sections) {
+            if (!section.content || !section.content.trim()) continue;
             const sectionChunks = this.chunkText(paperId, section.content, section.title);
             allChunks.push(...sectionChunks);
         }
-        return allChunks.map((chunk, i) => ({
-            ...chunk,
-            index: i,
-            id: uuidv5(`${paperId}-${i}`, CHUNK_NAMESPACE)
-        }));
+        return allChunks
+            .filter((chunk) => chunk.text && chunk.text.trim().length > 0)
+            .map((chunk, i) => ({
+                ...chunk,
+                index: i,
+                id: uuidv5(`${paperId}-${i}`, CHUNK_NAMESPACE)
+            }));
     }
 }
