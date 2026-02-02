@@ -6,10 +6,11 @@ import { ClaimModule } from '../claim/claim.module';
 import { HallucinationModule } from '../hallucination/hallucination.module';
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
 import { CsvExportService } from './csv-export.service';
+import { StatsService } from './stats.service';
 
 @Module({
     imports: [DataModule, RagModule, ClaimModule, HallucinationModule, EvaluationModule],
-    providers: [ExperimentService, CsvExportService],
-    exports: [ExperimentService]
+    providers: [ExperimentService, CsvExportService, StatsService],
+    exports: [ExperimentService, StatsService]
 })
 export class ExperimentModule {}

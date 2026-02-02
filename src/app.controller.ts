@@ -1,10 +1,13 @@
 import { Controller, Get, Query, Body, Post } from '@nestjs/common';
 import { PaperExperimentResult, BatchExperimentResult } from './experiment/types';
 import { ExperimentService } from './experiment/experiment.service';
-
+import { StatsService } from './experiment/stats.service';
 @Controller()
 export class AppController {
-    constructor(private experimentService: ExperimentService) {}
+    constructor(
+        private experimentService: ExperimentService,
+        private statsService: StatsService
+    ) {}
 
     // ##############################################################
     // --------------------- MAIN API ENDPOINTS ---------------------
@@ -92,5 +95,10 @@ export class AppController {
     @Get('pipeline/claims')
     async runClaimsPipeline(@Query('index') index: string = '0', @Query('useRag') useRag: boolean = true) {
         return this.experimentService.runClaimsPipeline(index, useRag);
+    }
+
+    @Get('stats/ttest')
+    async pairedTTest() {
+        return this.statsService.runPairedTTests();
     }
 }
